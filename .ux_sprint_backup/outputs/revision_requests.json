@@ -1,0 +1,170 @@
+{
+  "updated_at": "2026-07-27T20:02:35-04:00",
+  "requests": [
+    {
+      "request_id": "rev_6c67b19470",
+      "campaign": "2026-07-27_191825_campaign",
+      "affected_asset": "Ritual Reel",
+      "original_version": 1,
+      "requested_changes": {
+        "recommendation_type": "remove_asset",
+        "title": "Remove IMG_2549 from Ritual Reel",
+        "summary": "Drop clip IMG_2549.mov from the Ritual Reel source list. Do not overwrite the existing render until a rebuild is approved.",
+        "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+        "copy_changes": null,
+        "timing_changes": {
+          "cta_appear_at_seconds": 10.0,
+          "cta_window": "10\u201312",
+          "note": "CTA overlay appears at second 10."
+        },
+        "source_assets": {
+          "remove": [
+            "assets/reading-hour-shoot/IMG_2549.mov"
+          ],
+          "keep": [
+            "assets/reading-hour-shoot/IMG_2545.mov",
+            "assets/reading-hour-shoot/IMG_2547.mov"
+          ],
+          "rebuild": true
+        },
+        "files_to_change": [
+          "ritual_reel/ritual_reel_draft.mp4",
+          "ritual_reel/caption.md",
+          "assets/reading-hour-shoot/IMG_2549.mov",
+          "assets/reading-hour-shoot/IMG_2545.mov",
+          "assets/reading-hour-shoot/IMG_2547.mov"
+        ],
+        "executable": true,
+        "target_duration_seconds": 15.0
+      },
+      "source_recommendation_ids": [
+        "rec_ritual_remove_2549"
+      ],
+      "status": "ready_for_review",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "completed_at": "2026-07-27T20:02:35-04:00",
+      "output_version": 2,
+      "error": null,
+      "manual_reason": null
+    },
+    {
+      "request_id": "rev_04c8e1d9c2",
+      "campaign": "2026-07-27_191825_campaign",
+      "affected_asset": "Ritual Reel",
+      "original_version": 1,
+      "requested_changes": {
+        "recommendation_type": "rerender",
+        "title": "Rebuild Ritual Reel with IMG_2545 and IMG_2547",
+        "summary": "Render a new versioned Ritual Reel using only IMG_2545.mov and IMG_2547.mov. Keep the original output.",
+        "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+        "copy_changes": null,
+        "timing_changes": {
+          "cta_appear_at_seconds": 10.0,
+          "cta_window": "10\u201312",
+          "note": "CTA overlay appears at second 10."
+        },
+        "source_assets": {
+          "remove": [
+            "assets/reading-hour-shoot/IMG_2549.mov"
+          ],
+          "keep": [
+            "assets/reading-hour-shoot/IMG_2545.mov",
+            "assets/reading-hour-shoot/IMG_2547.mov"
+          ],
+          "rebuild": true
+        },
+        "files_to_change": [
+          "ritual_reel/ritual_reel_draft.mp4",
+          "ritual_reel/caption.md",
+          "assets/reading-hour-shoot/IMG_2549.mov",
+          "assets/reading-hour-shoot/IMG_2545.mov",
+          "assets/reading-hour-shoot/IMG_2547.mov"
+        ],
+        "executable": true,
+        "target_duration_seconds": 15.0
+      },
+      "source_recommendation_ids": [
+        "rec_ritual_rebuild_two_clip"
+      ],
+      "status": "ready_for_review",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "completed_at": "2026-07-27T20:02:35-04:00",
+      "output_version": 2,
+      "error": null,
+      "manual_reason": null
+    },
+    {
+      "request_id": "rev_e2d10fc638",
+      "campaign": "2026-07-27_191825_campaign",
+      "affected_asset": "Ritual Reel",
+      "original_version": 1,
+      "requested_changes": {
+        "recommendation_type": "change_timing",
+        "title": "Move Ritual Reel CTA to seconds 10\u201312",
+        "summary": "Set Join the waitlist overlay to appear at seconds 10\u201312 in the new versioned output.",
+        "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+        "copy_changes": null,
+        "timing_changes": {
+          "cta_appear_at_seconds": 10.0,
+          "cta_window": "10\u201312",
+          "note": "CTA overlay appears at second 10."
+        },
+        "source_assets": {
+          "remove": [
+            "assets/reading-hour-shoot/IMG_2549.mov"
+          ],
+          "keep": [
+            "assets/reading-hour-shoot/IMG_2545.mov",
+            "assets/reading-hour-shoot/IMG_2547.mov"
+          ],
+          "rebuild": true
+        },
+        "files_to_change": [
+          "ritual_reel/ritual_reel_draft.mp4",
+          "ritual_reel/caption.md",
+          "assets/reading-hour-shoot/IMG_2549.mov",
+          "assets/reading-hour-shoot/IMG_2545.mov",
+          "assets/reading-hour-shoot/IMG_2547.mov"
+        ],
+        "executable": true,
+        "target_duration_seconds": 15.0
+      },
+      "source_recommendation_ids": [
+        "rec_ritual_cta_10_12"
+      ],
+      "status": "ready_for_review",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "completed_at": "2026-07-27T20:02:35-04:00",
+      "output_version": 2,
+      "error": null,
+      "manual_reason": null
+    },
+    {
+      "request_id": "rev_e10f898a6c",
+      "campaign": "2026-07-27_191825_campaign",
+      "affected_asset": "Campaign",
+      "original_version": null,
+      "requested_changes": {
+        "recommendation_type": "revise_copy",
+        "title": "Revise Ritual Reel caption and Page Turn Loop hook",
+        "summary": "Caption and hook rewrites require editorial judgment. Mark as manual completion unless exact replacement copy is supplied.",
+        "full_instruction": "Rewrite the page_turn_loop hook and the ritual_reel caption before publishing either piece. 'This is what your afternoon could feel like' is conditional and generic \u2014 it must be replaced with a line that names the specific feeling rather than promising one. The ritual_reel caption's opening paragraph ('Oh Betty Jaletti is a literary lifestyle brand built around that hour') is founder-update voice and must be cut; the caption should open on the ritual itself ('A book you've been saving. A drink that's just right.') and let the brand name appear only in the closing CTA line. The Pinterest caption keyword dump must be replaced entirely \u2014 it will attract the wrong audience and is directly contrary to brand voice.",
+        "copy_changes": null,
+        "timing_changes": null,
+        "source_assets": null,
+        "files_to_change": [],
+        "executable": false,
+        "manual_reason": "Copy revision needs approved replacement text. BettyOS will not invent new caption or hook wording."
+      },
+      "source_recommendation_ids": [
+        "rec_copy_rewrite_package"
+      ],
+      "status": "manual_completion_required",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "completed_at": "2026-07-27T20:01:53-04:00",
+      "output_version": null,
+      "error": null,
+      "manual_reason": "Copy revision needs approved replacement text. BettyOS will not invent new caption or hook wording."
+    }
+  ]
+}

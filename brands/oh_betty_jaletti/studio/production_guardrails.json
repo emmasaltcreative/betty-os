@@ -1,0 +1,22 @@
+{
+  "brand_id": "oh_betty_jaletti",
+  "product": "Heirloom Book Cover — The Reading Hour",
+  "verification": "Not Automatically Verified",
+  "note": "These rules guide human review and future semantic validation. Studio does not claim visual verification of product construction.",
+  "rules": [
+    "The Heirloom Book Cover has a continuous shell.",
+    "Do not add a sewn spine seam.",
+    "Do not create a permanent sharp spine crease.",
+    "Preserve the jade exterior color.",
+    "Preserve the cream poplin lining.",
+    "Preserve the fixed inward flaps.",
+    "Preserve the left bookmark-pocket flap.",
+    "Preserve the right-side elastic placement.",
+    "Preserve the woven-label placement.",
+    "Do not add decorative front-cover ornamentation.",
+    "Do not invent products or accessories.",
+    "Do not change product proportions materially.",
+    "Do not misrepresent material texture or construction."
+  ],
+  "updated_at": "2026-07-28T13:48:39+00:00"
+}

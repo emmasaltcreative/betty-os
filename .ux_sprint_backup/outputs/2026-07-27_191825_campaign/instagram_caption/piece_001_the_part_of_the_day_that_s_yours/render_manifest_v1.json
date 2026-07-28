@@ -1,0 +1,13 @@
+{
+  "template_id": "instagram_caption",
+  "content_piece_id": "piece_001_the_part_of_the_day_that_s_yours",
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-07-27T22:28:00-04:00",
+  "review_status": "awaiting_review",
+  "source_assets": [],
+  "outputs": [
+    "instagram_caption_v1.md"
+  ],
+  "config": {}
+}

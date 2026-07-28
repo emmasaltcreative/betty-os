@@ -1,0 +1,98 @@
+{
+  "campaign_id": "2026-07-27_191825_campaign",
+  "campaign": "2026-07-27_191825_campaign",
+  "updated_at": "2026-07-27T22:35:58-04:00",
+  "items": [
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "page_turn_loop",
+      "template_id": "single_clip_atmospheric_loop",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "caption.md",
+      "item_type": "caption",
+      "file_path": "page_turn_loop/caption.md"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "page_turn_loop",
+      "template_id": "single_clip_atmospheric_loop",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "page_turn_loop_draft.mp4",
+      "item_type": "video",
+      "file_path": "page_turn_loop/page_turn_loop_draft.mp4"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "caption.md",
+      "item_type": "caption",
+      "file_path": "ritual_reel/caption.md"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "ritual_reel_draft.mp4",
+      "item_type": "video",
+      "file_path": "ritual_reel/ritual_reel_draft.mp4"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "ritual_reel_v1.mp4",
+      "item_type": "video",
+      "file_path": "ritual_reel/ritual_reel_v1.mp4"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "render_version_id": "v2",
+      "status": "needs_revision",
+      "note": "Opening language is too generic. Rewrite in Betty's voice with more emotional specificity and recognition.",
+      "reviewed_at": "2026-07-27T20:12:49",
+      "updated_at": "2026-07-27T20:12:49",
+      "item_name": "ritual_reel_v2.mp4",
+      "item_type": "video",
+      "file_path": "ritual_reel/ritual_reel_v2.mp4"
+    },
+    {
+      "campaign_id": "2026-07-27_191825_campaign",
+      "asset_id": "piece_001_the_part_of_the_day_that_s_yours",
+      "template_id": "editorial_static_pin",
+      "render_version_id": "v1",
+      "status": "needs_revision",
+      "note": "Move CTA earlier",
+      "reviewed_at": "2026-07-27T22:28:03-04:00",
+      "updated_at": "2026-07-27T22:28:03-04:00",
+      "item_name": "piece_001_the_part_of_the_day_that_s_yours",
+      "item_type": "render",
+      "file_path": "editorial_static_pin/piece_001_the_part_of_the_day_that_s_yours"
+    }
+  ]
+}

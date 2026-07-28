@@ -1,0 +1,18 @@
+{
+  "primary_text_color": "white",
+  "secondary_text_color": "white",
+  "text_opacity": 0.96,
+  "shadow": {
+    "enabled": true,
+    "offset_x": 1,
+    "offset_y": 2,
+    "color": "black",
+    "opacity": 0.45
+  },
+  "overlay_opacity": 0.96,
+  "background_wash": {
+    "enabled": false,
+    "color": "black",
+    "opacity": 0.0
+  }
+}

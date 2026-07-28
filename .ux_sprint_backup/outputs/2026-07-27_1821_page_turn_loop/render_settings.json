@@ -1,0 +1,136 @@
+{
+  "piece": "Piece #4 \u2014 The Page Turn Loop",
+  "content_package": "2026-07-27_1800_content_package.md",
+  "style_guide": "production/style_guide.md",
+  "production": {
+    "typography": {
+      "font_path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+      "font_name": "Georgia",
+      "fallback_font_path": "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+      "fallback_font_name": "Times New Roman",
+      "hook_size": 42,
+      "footer_size": 28,
+      "cta_size": 30,
+      "line_spacing": 12,
+      "max_text_width": 860,
+      "default_alignment": "center"
+    },
+    "overlays": {
+      "text_color": "white",
+      "opacity": 0.96,
+      "shadow": {
+        "enabled": true,
+        "offset_x": 1,
+        "offset_y": 2,
+        "color": "black",
+        "opacity": 0.45
+      },
+      "wash": {
+        "enabled": false,
+        "color": "black",
+        "opacity": 0.0
+      },
+      "opaque_rectangular_backgrounds": false,
+      "safe_margins": {
+        "top": 140,
+        "bottom": 240,
+        "left": 90,
+        "right": 90
+      },
+      "hook_position": {
+        "x": "center",
+        "y_ratio": 0.13
+      },
+      "footer_position": {
+        "x": "center",
+        "y_ratio": 0.76
+      },
+      "cta_position": {
+        "x": "center",
+        "y_ratio": 0.86
+      }
+    },
+    "transitions": {
+      "opening_fade_seconds": 0.25,
+      "closing_fade_seconds": 0.25,
+      "text_fade_seconds": 0.4,
+      "default_cut_style": "cut",
+      "black_title_card": false
+    },
+    "export": {
+      "width": 1080,
+      "height": 1920,
+      "frame_rate": 30,
+      "codec": "libx264",
+      "audio": "remove",
+      "quality": {
+        "preset": "medium",
+        "crf": 20
+      },
+      "platform_safe_bottom_margin": 240
+    },
+    "template": {
+      "piece_id": "page-turn-loop",
+      "source_relative_path": "assets/reading-hour-shoot/IMG_2545.mov",
+      "target_duration_seconds": 8,
+      "looping": {
+        "enabled_when_source_shorter": true,
+        "prefer_middle_segment_when_longer": true
+      },
+      "crop_strategy": "center_crop",
+      "hook": {
+        "lines": [
+          "This is what your afternoon",
+          "could feel like."
+        ],
+        "appear_at_seconds": 0.25,
+        "hold_through_end": true
+      },
+      "footer": {
+        "lines": [
+          "Oh Betty Jaletti",
+          "The Reading Hour"
+        ],
+        "appear_at_seconds": 0.6,
+        "hold_through_end": true
+      },
+      "cta": {
+        "text": "Join the waitlist",
+        "appear_at_seconds_from_end": 2.5,
+        "hold_through_end": true
+      },
+      "text_timing": {
+        "respect_safe_margins": true,
+        "avoid_subject_overlap": true
+      }
+    }
+  },
+  "resolved": {
+    "font_path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+    "cta_appear_at_seconds": 5.5,
+    "opening_fade_seconds": 0.25,
+    "closing_fade_seconds": 0.25
+  },
+  "source": {
+    "path": "assets/reading-hour-shoot/IMG_2545.mov",
+    "width": 1280,
+    "height": 720,
+    "duration_seconds": 6.367
+  },
+  "segment": {
+    "mode": "full_source_looped",
+    "source_start_seconds": 0.0,
+    "source_end_seconds": 6.367,
+    "output_duration_seconds": 8.0,
+    "looped": true,
+    "notes": "Source is only 6.367s; used the full clip and looped to reach 8s."
+  },
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "frame_rate": 30,
+    "codec": "libx264",
+    "audio": "remove",
+    "video": "page_turn_loop_draft.mp4"
+  }
+}

@@ -1,0 +1,279 @@
+{
+  "piece": "Piece #2 \u2014 The Ritual Reel",
+  "content_package": "2026-07-27_1917_content_package.md",
+  "style_guide": "production/style_guide.md",
+  "production": {
+    "global_defaults": {
+      "maximum_words_per_screen": 12,
+      "preferred_pacing": "unhurried",
+      "default_clip_overlap_seconds": 0.0,
+      "transition_style": "cut",
+      "default_fade_duration_seconds": 0.25,
+      "preferred_crop_strategy": "center_crop",
+      "opaque_rectangular_backgrounds": false,
+      "black_title_card": false,
+      "looping": {
+        "enabled_when_source_shorter": true,
+        "prefer_middle_segment_when_longer": true
+      }
+    },
+    "typography": {
+      "primary_font": {
+        "path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+        "name": "Georgia"
+      },
+      "secondary_font": {
+        "path": "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+        "name": "Times New Roman"
+      },
+      "hook": {
+        "size": 42,
+        "weight": "regular"
+      },
+      "footer": {
+        "size": 28,
+        "weight": "regular"
+      },
+      "cta": {
+        "size": 30,
+        "weight": "regular"
+      },
+      "line_spacing": 12,
+      "max_line_width": 860,
+      "default_alignment": "center",
+      "font_scaling": {
+        "min_size": 24,
+        "max_size": 56,
+        "shrink_to_fit": true
+      }
+    },
+    "colors": {
+      "primary_text_color": "white",
+      "secondary_text_color": "white",
+      "text_opacity": 0.96,
+      "shadow": {
+        "enabled": true,
+        "offset_x": 1,
+        "offset_y": 2,
+        "color": "black",
+        "opacity": 0.45
+      },
+      "overlay_opacity": 0.96,
+      "background_wash": {
+        "enabled": false,
+        "color": "black",
+        "opacity": 0.0
+      }
+    },
+    "layout": {
+      "hook_region": {
+        "x": "center",
+        "y_ratio": 0.13
+      },
+      "footer_region": {
+        "x": "center",
+        "y_ratio": 0.76
+      },
+      "cta_region": {
+        "x": "center",
+        "y_ratio": 0.86
+      },
+      "minimum_margins": {
+        "top": 140,
+        "bottom": 240,
+        "left": 90,
+        "right": 90
+      },
+      "maximum_text_width": 860,
+      "alignment": "center"
+    },
+    "animation": {
+      "opening_fade_seconds": 0.25,
+      "closing_fade_seconds": 0.25,
+      "text_fade_seconds": 0.4,
+      "default_transition": "cut",
+      "cta_appear_from_end_seconds": 2.5,
+      "hook_appear_at_seconds": 0.25,
+      "footer_appear_at_seconds": 0.6,
+      "intro_behavior": "immediate_footage"
+    },
+    "exports": {
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "codec": "libx264",
+      "bitrate": "8M",
+      "audio": {
+        "behavior": "remove"
+      },
+      "compression": {
+        "preset": "medium",
+        "crf": 20
+      }
+    },
+    "safe_zones": {
+      "default_platform": "instagram",
+      "instagram": {
+        "top": 140,
+        "bottom": 240,
+        "left": 90,
+        "right": 90
+      },
+      "pinterest": {
+        "top": 120,
+        "bottom": 220,
+        "left": 80,
+        "right": 80
+      },
+      "tiktok": {
+        "top": 160,
+        "bottom": 280,
+        "left": 90,
+        "right": 90
+      },
+      "youtube_shorts": {
+        "top": 140,
+        "bottom": 260,
+        "left": 90,
+        "right": 90
+      },
+      "threads": {
+        "top": 140,
+        "bottom": 240,
+        "left": 90,
+        "right": 90
+      }
+    },
+    "template": {
+      "piece_id": "ritual-reel",
+      "sources": [
+        {
+          "relative_path": "assets/reading-hour-shoot/IMG_2545.mov",
+          "target_duration_seconds": 8
+        },
+        {
+          "relative_path": "assets/reading-hour-shoot/IMG_2547.mov",
+          "target_duration_seconds": 8
+        },
+        {
+          "relative_path": "assets/reading-hour-shoot/IMG_2549.mov",
+          "target_duration_seconds": 9
+        }
+      ],
+      "target_duration_seconds": 25,
+      "safe_zone_platforms": [
+        "instagram"
+      ],
+      "looping": {
+        "enabled_when_source_shorter": false,
+        "prefer_middle_segment_when_longer": true
+      },
+      "hook": {
+        "lines": [
+          "You've been doing this your whole life."
+        ]
+      },
+      "supporting": {
+        "lines": [
+          "The reading hour. You already know what it is."
+        ]
+      },
+      "footer": {
+        "lines": [
+          "Oh Betty Jaletti",
+          "The Reading Hour"
+        ]
+      },
+      "cta": {
+        "text": "Join the waitlist"
+      }
+    }
+  },
+  "resolved": {
+    "crop_strategy": "center_crop",
+    "looping": {
+      "enabled_when_source_shorter": false,
+      "prefer_middle_segment_when_longer": true
+    },
+    "safe_margins": {
+      "top": 140,
+      "bottom": 240,
+      "left": 90,
+      "right": 90
+    },
+    "safe_zone_platforms": [
+      "instagram"
+    ],
+    "font_path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+    "transition_style": "cut",
+    "opening_fade_seconds": 0.25,
+    "closing_fade_seconds": 0.25,
+    "hook_appear_at_seconds": 0.25,
+    "supporting_appear_at_seconds": 6.367,
+    "supporting_end_at_seconds": 13.567,
+    "footer_appear_at_seconds": 14.167,
+    "cta_appear_at_seconds": 22.5
+  },
+  "clips": [
+    {
+      "path": "assets/reading-hour-shoot/IMG_2545.mov",
+      "width": 1280,
+      "height": 720,
+      "source_duration_seconds": 6.367,
+      "timeline_start_seconds": 0.0,
+      "timeline_end_seconds": 6.367,
+      "segment": {
+        "mode": "full_source",
+        "source_start_seconds": 0.0,
+        "source_end_seconds": 6.367,
+        "output_duration_seconds": 6.367,
+        "looped": false,
+        "notes": "Source shorter than target; exported full source without looping."
+      }
+    },
+    {
+      "path": "assets/reading-hour-shoot/IMG_2547.mov",
+      "width": 1280,
+      "height": 720,
+      "source_duration_seconds": 7.2,
+      "timeline_start_seconds": 6.367,
+      "timeline_end_seconds": 13.567,
+      "segment": {
+        "mode": "full_source",
+        "source_start_seconds": 0.0,
+        "source_end_seconds": 7.2,
+        "output_duration_seconds": 7.2,
+        "looped": false,
+        "notes": "Source shorter than target; exported full source without looping."
+      }
+    },
+    {
+      "path": "assets/reading-hour-shoot/IMG_2549.mov",
+      "width": 960,
+      "height": 528,
+      "source_duration_seconds": 48.625,
+      "timeline_start_seconds": 13.567,
+      "timeline_end_seconds": 25.0,
+      "segment": {
+        "mode": "middle_trim",
+        "source_start_seconds": 18.596,
+        "source_end_seconds": 30.029,
+        "output_duration_seconds": 11.433,
+        "looped": false,
+        "notes": "Used the middle segment of the source clip."
+      }
+    }
+  ],
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "codec": "libx264",
+    "bitrate": "8M",
+    "audio": {
+      "behavior": "remove"
+    },
+    "duration_seconds": 25.0,
+    "video": "ritual_reel_draft.mp4"
+  }
+}

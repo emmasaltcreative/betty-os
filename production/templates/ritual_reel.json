@@ -1,0 +1,42 @@
+{
+  "piece_id": "ritual-reel",
+  "sources": [
+    {
+      "relative_path": "assets/reading-hour-shoot/IMG_2545.mov",
+      "target_duration_seconds": 8
+    },
+    {
+      "relative_path": "assets/reading-hour-shoot/IMG_2547.mov",
+      "target_duration_seconds": 8
+    },
+    {
+      "relative_path": "assets/reading-hour-shoot/IMG_2549.mov",
+      "target_duration_seconds": 9
+    }
+  ],
+  "target_duration_seconds": 25,
+  "safe_zone_platforms": ["instagram"],
+  "looping": {
+    "enabled_when_source_shorter": false,
+    "prefer_middle_segment_when_longer": true
+  },
+  "hook": {
+    "lines": [
+      "You've been doing this your whole life."
+    ]
+  },
+  "supporting": {
+    "lines": [
+      "The reading hour. You already know what it is."
+    ]
+  },
+  "footer": {
+    "lines": [
+      "Oh Betty Jaletti",
+      "The Reading Hour"
+    ]
+  },
+  "cta": {
+    "text": "Join the waitlist"
+  }
+}

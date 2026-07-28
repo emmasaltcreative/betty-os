@@ -1,0 +1,17 @@
+{
+  "piece": "single_clip_atmospheric_loop",
+  "versions": [
+    {
+      "version": 1,
+      "filename": "single_clip_atmospheric_loop_v1.mp4",
+      "parent_version": null,
+      "revision_request_id": null,
+      "revision_request_ids": [],
+      "created_at": "2026-07-27T22:32:32-04:00",
+      "review_status": "awaiting_review",
+      "addressed_recommendation_ids": [],
+      "source_draft": "page_turn_loop_draft.mp4"
+    }
+  ],
+  "current_version": 1
+}

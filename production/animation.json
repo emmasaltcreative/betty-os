@@ -1,0 +1,10 @@
+{
+  "opening_fade_seconds": 0.25,
+  "closing_fade_seconds": 0.25,
+  "text_fade_seconds": 0.4,
+  "default_transition": "cut",
+  "cta_appear_from_end_seconds": 2.5,
+  "hook_appear_at_seconds": 0.25,
+  "footer_appear_at_seconds": 0.6,
+  "intro_behavior": "immediate_footage"
+}

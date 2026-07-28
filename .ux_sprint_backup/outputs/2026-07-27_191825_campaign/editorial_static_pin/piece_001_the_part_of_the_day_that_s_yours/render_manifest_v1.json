@@ -1,0 +1,19 @@
+{
+  "template_id": "editorial_static_pin",
+  "content_piece_id": "piece_001_the_part_of_the_day_that_s_yours",
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-07-27T22:28:00-04:00",
+  "review_status": "awaiting_review",
+  "source_assets": [
+    "assets/reading-hour-shoot/IMG_2545.mov",
+    "assets/reading-hour-shoot/IMG_2547.mov"
+  ],
+  "outputs": [
+    "editorial_static_pin_v1.png",
+    "caption_v1.md"
+  ],
+  "config": {
+    "aspect": "2:3"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "campaign": "2026-07-27_1916_campaign",
+  "migrated": [
+    {
+      "legacy_folder": "ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "display_name": "Cinematic Multi-Clip Reel",
+      "preserved_original": "/Users/emmaganun/betty-os/outputs/2026-07-27_1916_campaign/ritual_reel",
+      "canonical_folder": "/Users/emmaganun/betty-os/outputs/2026-07-27_1916_campaign/cinematic_multi_clip_reel",
+      "migrated_at": "2026-07-27T22:35:58-04:00"
+    },
+    {
+      "legacy_folder": "page_turn_loop",
+      "template_id": "single_clip_atmospheric_loop",
+      "display_name": "Single-Clip Atmospheric Loop",
+      "preserved_original": "/Users/emmaganun/betty-os/outputs/2026-07-27_1916_campaign/page_turn_loop",
+      "canonical_folder": "/Users/emmaganun/betty-os/outputs/2026-07-27_1916_campaign/single_clip_atmospheric_loop",
+      "migrated_at": "2026-07-27T22:35:58-04:00"
+    }
+  ],
+  "unresolved": [],
+  "errors": [],
+  "updated_at": "2026-07-27T22:35:58-04:00"
+}

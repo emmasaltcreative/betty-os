@@ -1,0 +1,22 @@
+{
+  "template_id": "editorial_carousel",
+  "content_piece_id": "piece_001_the_part_of_the_day_that_s_yours",
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-07-27T22:28:03-04:00",
+  "review_status": "awaiting_review",
+  "source_assets": [
+    "assets/reading-hour-shoot/IMG_2545.mov",
+    "assets/reading-hour-shoot/IMG_2547.mov"
+  ],
+  "outputs": [
+    "editorial_carousel_slide1_v1.png",
+    "editorial_carousel_slide2_v1.png",
+    "editorial_carousel_slide3_v1.png",
+    "caption_v1.md"
+  ],
+  "config": {
+    "aspect": "4:5",
+    "slides": 3
+  }
+}

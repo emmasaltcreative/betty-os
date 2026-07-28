@@ -1,0 +1,77 @@
+{
+  "package": "2026-07-27_194450_content_package.md",
+  "updated_at": "2026-07-27T22:27:59-04:00",
+  "pieces": {
+    "piece_001_the_part_of_the_day_that_s_yours": {
+      "piece_id": "piece_001_the_part_of_the_day_that_s_yours",
+      "template_id": "editorial_static_pin",
+      "primary_template_id": "cinematic_multi_clip_reel",
+      "confidence": 0.9,
+      "rationale": "Vertical reel with multiple motion sources.",
+      "alternative_template_ids": [
+        "pinterest_collage_pin",
+        "pinterest_caption_metadata",
+        "instagram_caption"
+      ],
+      "missing_requirements": [],
+      "override": true,
+      "updated_at": "2026-07-27T22:27:59-04:00"
+    },
+    "piece_002_still_life_reading_hour": {
+      "piece_id": "piece_002_still_life_reading_hour",
+      "template_id": "text_led_editorial_pin",
+      "primary_template_id": "text_led_editorial_pin",
+      "confidence": 0.8,
+      "rationale": "Text-led editorial pin.",
+      "alternative_template_ids": [
+        "editorial_static_pin",
+        "pinterest_caption_metadata"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:27:59-04:00"
+    },
+    "piece_003_lamp_on_book_open_evening_found": {
+      "piece_id": "piece_003_lamp_on_book_open_evening_found",
+      "template_id": "cinematic_multi_clip_reel",
+      "primary_template_id": "cinematic_multi_clip_reel",
+      "confidence": 0.9,
+      "rationale": "Vertical reel with multiple motion sources.",
+      "alternative_template_ids": [
+        "editorial_static_pin",
+        "instagram_caption"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:27:59-04:00"
+    },
+    "piece_004_what_the_reading_hour_looks_like_pintere": {
+      "piece_id": "piece_004_what_the_reading_hour_looks_like_pintere",
+      "template_id": "pinterest_caption_metadata",
+      "primary_template_id": "pinterest_caption_metadata",
+      "confidence": 0.88,
+      "rationale": "Pinterest caption/metadata requested.",
+      "alternative_template_ids": [
+        "text_led_editorial_pin",
+        "editorial_static_pin"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:27:59-04:00"
+    },
+    "piece_005_the_ritual_has_its_hour_pinterest_static": {
+      "piece_id": "piece_005_the_ritual_has_its_hour_pinterest_static",
+      "template_id": "pinterest_caption_metadata",
+      "primary_template_id": "pinterest_caption_metadata",
+      "confidence": 0.88,
+      "rationale": "Pinterest caption/metadata requested.",
+      "alternative_template_ids": [
+        "text_led_editorial_pin",
+        "editorial_static_pin"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:27:59-04:00"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "maximum_words_per_screen": 12,
+  "preferred_pacing": "unhurried",
+  "default_clip_overlap_seconds": 0.0,
+  "transition_style": "cut",
+  "default_fade_duration_seconds": 0.25,
+  "preferred_crop_strategy": "center_crop",
+  "opaque_rectangular_backgrounds": false,
+  "black_title_card": false,
+  "looping": {
+    "enabled_when_source_shorter": true,
+    "prefer_middle_segment_when_longer": true
+  }
+}

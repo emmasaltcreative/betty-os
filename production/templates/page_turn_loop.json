@@ -1,0 +1,21 @@
+{
+  "piece_id": "page-turn-loop",
+  "source_relative_path": "assets/reading-hour-shoot/IMG_2545.mov",
+  "target_duration_seconds": 8,
+  "safe_zone_platforms": ["instagram", "pinterest"],
+  "hook": {
+    "lines": [
+      "This is what your afternoon",
+      "could feel like."
+    ]
+  },
+  "footer": {
+    "lines": [
+      "Oh Betty Jaletti",
+      "The Reading Hour"
+    ]
+  },
+  "cta": {
+    "text": "Join the waitlist"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "codec": "libx264",
+  "bitrate": "8M",
+  "audio": {
+    "behavior": "remove"
+  },
+  "compression": {
+    "preset": "medium",
+    "crf": 20
+  }
+}

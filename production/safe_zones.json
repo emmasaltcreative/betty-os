@@ -1,0 +1,33 @@
+{
+  "default_platform": "instagram",
+  "instagram": {
+    "top": 140,
+    "bottom": 240,
+    "left": 90,
+    "right": 90
+  },
+  "pinterest": {
+    "top": 120,
+    "bottom": 220,
+    "left": 80,
+    "right": 80
+  },
+  "tiktok": {
+    "top": 160,
+    "bottom": 280,
+    "left": 90,
+    "right": 90
+  },
+  "youtube_shorts": {
+    "top": 140,
+    "bottom": 260,
+    "left": 90,
+    "right": 90
+  },
+  "threads": {
+    "top": 140,
+    "bottom": 240,
+    "left": 90,
+    "right": 90
+  }
+}

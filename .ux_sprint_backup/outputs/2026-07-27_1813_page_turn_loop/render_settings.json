@@ -1,0 +1,31 @@
+{
+  "piece": "Piece #4 \u2014 The Page Turn Loop",
+  "content_package": "2026-07-27_1800_content_package.md",
+  "config_file": "config/page_turn_loop.json",
+  "source": {
+    "path": "assets/reading-hour-shoot/IMG_2545.mov",
+    "width": 1280,
+    "height": 720,
+    "duration_seconds": 6.367
+  },
+  "segment": {
+    "mode": "full_source_looped",
+    "source_start_seconds": 0.0,
+    "source_end_seconds": 6.367,
+    "output_duration_seconds": 8.0,
+    "looped": true,
+    "notes": "Source is only 6.367s; used the full clip and looped to reach 8s."
+  },
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "crop_mode": "center_crop",
+    "remove_audio": true,
+    "video": "page_turn_loop_draft.mp4"
+  },
+  "overlays": {
+    "hook": "This is what your afternoon could feel like.",
+    "footer_line1": "Oh Betty Jaletti \u2014 The Reading Hour",
+    "footer_line2": "Waitlist now open."
+  }
+}

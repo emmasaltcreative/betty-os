@@ -1,0 +1,74 @@
+{
+  "package": "2026-07-27_1917_content_package.md",
+  "updated_at": "2026-07-27T22:32:31-04:00",
+  "pieces": {
+    "piece_001_you_already_know_what_this_feels_like": {
+      "piece_id": "piece_001_you_already_know_what_this_feels_like",
+      "template_id": "editorial_static_pin",
+      "primary_template_id": "editorial_static_pin",
+      "confidence": 0.9,
+      "rationale": "Static editorial Pinterest pin.",
+      "alternative_template_ids": [
+        "pinterest_caption_metadata"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:32:31-04:00"
+    },
+    "piece_002_the_ritual_reel": {
+      "piece_id": "piece_002_the_ritual_reel",
+      "template_id": "cinematic_multi_clip_reel",
+      "primary_template_id": "cinematic_multi_clip_reel",
+      "confidence": 0.9,
+      "rationale": "Vertical reel with multiple motion sources.",
+      "alternative_template_ids": [
+        "instagram_caption"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:32:31-04:00"
+    },
+    "piece_003_the_brand_story_email_with_embedded_vide": {
+      "piece_id": "piece_003_the_brand_story_email_with_embedded_vide",
+      "template_id": "email_letter",
+      "primary_template_id": "email_letter",
+      "confidence": 0.86,
+      "rationale": "Piece reads as email/letter copy.",
+      "alternative_template_ids": [
+        "launch_email"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:32:31-04:00"
+    },
+    "piece_004_the_page_turn_loop_pinterest_instagram_s": {
+      "piece_id": "piece_004_the_page_turn_loop_pinterest_instagram_s",
+      "template_id": "cinematic_multi_clip_reel",
+      "primary_template_id": "cinematic_multi_clip_reel",
+      "confidence": 0.9,
+      "rationale": "Vertical reel with multiple motion sources.",
+      "alternative_template_ids": [
+        "editorial_static_pin",
+        "editorial_static_pin",
+        "instagram_caption"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:32:31-04:00"
+    },
+    "piece_005_pov_you_found_it": {
+      "piece_id": "piece_005_pov_you_found_it",
+      "template_id": "cinematic_multi_clip_reel",
+      "primary_template_id": "cinematic_multi_clip_reel",
+      "confidence": 0.9,
+      "rationale": "Vertical reel with multiple motion sources.",
+      "alternative_template_ids": [
+        "product_reveal",
+        "instagram_caption"
+      ],
+      "missing_requirements": [],
+      "override": false,
+      "updated_at": "2026-07-27T22:32:31-04:00"
+    }
+  }
+}

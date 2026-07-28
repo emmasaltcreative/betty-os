@@ -1,0 +1,42 @@
+{
+  "assets": [
+    {
+      "asset_id": "ba_12a2e9d21f",
+      "brand_id": "oh_betty_jaletti",
+      "display_name": "Oh Betty Primary",
+      "role": "primary",
+      "file_path": "brands/oh_betty_jaletti/studio/assets/ba_12a2e9d21f_seed_logo.png",
+      "original_filename": "_seed_logo.png",
+      "mime_type": "image/png",
+      "width": 320,
+      "height": 90,
+      "aspect_ratio": 3.5555555555555554,
+      "has_transparency": true,
+      "preferred_background": "light",
+      "minimum_display_width": 48,
+      "default_opacity": 0.85,
+      "default_size_percentage": 18.0,
+      "allowed_placements": [
+        "top_left",
+        "top_center",
+        "top_right",
+        "center_left",
+        "center",
+        "center_right",
+        "bottom_left",
+        "bottom_center",
+        "bottom_right",
+        "custom"
+      ],
+      "prohibited_placements": [],
+      "default_safe_margin": 24.0,
+      "active": true,
+      "is_default_for_role": true,
+      "created_at": "2026-07-28T13:48:39+00:00",
+      "updated_at": "2026-07-28T13:48:39+00:00",
+      "archived": false
+    }
+  ],
+  "brand_id": "oh_betty_jaletti",
+  "updated_at": "2026-07-28T13:48:39+00:00"
+}

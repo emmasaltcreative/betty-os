@@ -1,0 +1,22 @@
+{
+  "hook_region": {
+    "x": "center",
+    "y_ratio": 0.13
+  },
+  "footer_region": {
+    "x": "center",
+    "y_ratio": 0.76
+  },
+  "cta_region": {
+    "x": "center",
+    "y_ratio": 0.86
+  },
+  "minimum_margins": {
+    "top": 140,
+    "bottom": 240,
+    "left": 90,
+    "right": 90
+  },
+  "maximum_text_width": 860,
+  "alignment": "center"
+}

@@ -1,0 +1,30 @@
+{
+  "primary_font": {
+    "path": "/System/Library/Fonts/Supplemental/Georgia.ttf",
+    "name": "Georgia"
+  },
+  "secondary_font": {
+    "path": "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+    "name": "Times New Roman"
+  },
+  "hook": {
+    "size": 42,
+    "weight": "regular"
+  },
+  "footer": {
+    "size": 28,
+    "weight": "regular"
+  },
+  "cta": {
+    "size": 30,
+    "weight": "regular"
+  },
+  "line_spacing": 12,
+  "max_line_width": 860,
+  "default_alignment": "center",
+  "font_scaling": {
+    "min_size": 24,
+    "max_size": 56,
+    "shrink_to_fit": true
+  }
+}

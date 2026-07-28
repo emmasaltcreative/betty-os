@@ -1,0 +1,121 @@
+{
+  "campaign_goal": "Grow a qualified waitlist for First Edition: The Reading Hour by making the reading ritual feel recognized, specific, and worth waiting for.",
+  "content_package": "2026-07-27_194450_content_package.md",
+  "renders": [
+    "outputs/2026-07-27_191825_campaign/ritual_reel",
+    "outputs/2026-07-27_191825_campaign/page_turn_loop"
+  ],
+  "brand_alignment": {
+    "label": "Brand Alignment",
+    "score": 6.5,
+    "reason": "The core visual instinct is right \u2014 hands, book, rings, natural light \u2014 and the ritual-first framing honors the brand's central idea. But the ritual_reel's inclusion of IMG_2549 (salt lamp, seashell poster, dorm-desk energy) pulls the execution away from Upper West Side literary apartment toward something more Pinterest-cozy. The page_turn_loop hook 'This is what your afternoon could feel like' is aspirational-generic, not emotionally specific \u2014 it sounds like a lifestyle ad, not Oh Betty Jaletti. The brand's quiet confidence gets diluted when copy explains the feeling rather than names it."
+  },
+  "business_alignment": {
+    "label": "Business Alignment",
+    "score": 6.0,
+    "reason": "Both renders surface the waitlist CTA and avoid false inventory claims \u2014 that discipline is correct. However, the ritual_reel caption crosses into brand-explanation mode ('Oh Betty Jaletti is a literary lifestyle brand built around that hour') which reads as founder-update voice, not desire-creation. The page_turn_loop Pinterest caption is a keyword-dump SEO tag list ('book lover gifts | heirloom book cover | reading candle') that flatly contradicts the brand's instruction to avoid generic lifestyle-brand language and will attract exactly the diluted, non-qualified audience the strategy warns against. Waitlist conversion requires qualified desire \u2014 these captions trade that for reach."
+  },
+  "emotional_specificity": {
+    "label": "Emotional Specificity",
+    "score": 5.5,
+    "reason": "The ritual_reel hook 'You've been doing this your whole life' is the strongest emotional moment in either render \u2014 it lands with recognition rather than aspiration. But the supporting line 'The reading hour. You already know what it is.' undercuts it by stating what it just showed; the specificity collapses into self-explanation. The page_turn_loop hook 'This is what your afternoon could feel like' is the weakest line in the package \u2014 conditional and generic, it could belong to a mattress ad. The caption line 'A book you've been saving. A drink that's just right. The lamp on low.' in ritual_reel is the closest thing to genuine specificity and should be the emotional anchor, not buried mid-caption."
+  },
+  "editorial_quality": {
+    "label": "Editorial Quality",
+    "score": 6.0,
+    "reason": "The ritual_reel's text timing has a structural problem: the footer ('Oh Betty Jaletti / The Reading Hour') appears at 14.2 seconds and the CTA ('Join the waitlist') doesn't arrive until 22.5 seconds \u2014 meaning 8+ seconds of brand-name-only screen time with no emotional or narrative momentum. The page_turn_loop loops a 6.4-second clip to 8 seconds, which will produce a visible stutter at the seam that reads as unpolished on a brand promising craft and intentionality. The center-crop on a 1280x720 source upscaled to 1080x1920 will show significant quality loss and softness \u2014 the visual clarity that makes rings and page texture read as 'heirloom' will be compromised."
+  },
+  "visual_consistency": {
+    "label": "Visual Consistency",
+    "score": 6.5,
+    "reason": "Clips 1 and 2 (IMG_2545, IMG_2547) are visually coherent \u2014 same hands, same sweater, same natural light quality, same table surface. The cut between them in the ritual_reel will hold. IMG_2549 is a different environment, different resolution (960x528 vs 1280x720), different color temperature, and different aesthetic register \u2014 the warm-red salt lamp glow is a hard contrast to the cool natural light of the first two clips. No color grade unification is confirmed in the render settings, so the three-clip sequence will feel like two different shoots, not one ritual. The page_turn_loop is visually cleaner precisely because it stays on one clip."
+  },
+  "conversion_potential": {
+    "label": "Conversion Potential",
+    "score": 5.5,
+    "reason": "The CTA 'Join the waitlist' is honest and appropriately restrained \u2014 no fake urgency, no pressure. But the ritual_reel's CTA appears at second 22.5 of a 25-second video, leaving almost no dwell time for the ask to register before the video ends or loops. On Reels, most viewers will not reach second 22. The page_turn_loop's CTA appears at 5.5 seconds of an 8-second clip \u2014 better timing, but the hook it sits under ('This is what your afternoon could feel like') hasn't built enough desire to make the waitlist feel worth joining. The strongest conversion line in the entire package \u2014 'A book you've been saving. A drink that's just right.' \u2014 lives in the caption body where most non-followers will never see it."
+  },
+  "overall_readiness": {
+    "label": "Overall Readiness",
+    "score": 5.5,
+    "reason": "Neither render is publishable without intervention. The ritual_reel has a resolution mismatch in clip 3, a CTA timing problem, a caption that explains the brand instead of honoring the ritual, and an aesthetic misalignment in its third clip that will be visible to anyone who knows the brand. The page_turn_loop has a loop seam issue, a hook that belongs to a different brand, and a Pinterest caption that actively undermines waitlist qualification. The bones of the creative are right \u2014 the assets, the ritual framing, the restraint in product mention \u2014 but the execution has enough structural and copy problems that publishing as-is risks establishing the wrong brand impression with cold audiences."
+  },
+  "highest_impact_improvements": [
+    "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+    "Rewrite the page_turn_loop hook and the ritual_reel caption before publishing either piece. 'This is what your afternoon could feel like' is conditional and generic \u2014 it must be replaced with a line that names the specific feeling rather than promising one. The ritual_reel caption's opening paragraph ('Oh Betty Jaletti is a literary lifestyle brand built around that hour') is founder-update voice and must be cut; the caption should open on the ritual itself ('A book you've been saving. A drink that's just right.') and let the brand name appear only in the closing CTA line. The Pinterest caption keyword dump must be replaced entirely \u2014 it will attract the wrong audience and is directly contrary to brand voice.",
+    "Fix the CTA timing in the ritual_reel: the 'Join the waitlist' overlay appearing at second 22.5 of a 25-second video means most Reels viewers will never see it. The CTA should appear no later than second 10\u201312, after the supporting line has landed but with enough remaining runtime for the ask to be read and acted on. Simultaneously, address the page_turn_loop seam: the 6.4-second source looped to 8 seconds will stutter visibly \u2014 either trim the target duration to match the source (6\u20136.5 seconds) or select a longer source clip. A visible loop on a brand selling craft and intentionality is a trust signal failure."
+  ],
+  "overall_readiness_score": 5.5,
+  "recommendations": [
+    {
+      "recommendation_id": "rec_ritual_remove_2549",
+      "title": "Remove IMG_2549 from Ritual Reel",
+      "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+      "rationale": "IMG_2549 breaks visual consistency (resolution, color temperature, salt-lamp aesthetic) against the Upper West Side literary register.",
+      "affected_asset": "Ritual Reel",
+      "affected_files": [
+        "ritual_reel/ritual_reel_draft.mp4",
+        "ritual_reel/caption.md",
+        "assets/reading-hour-shoot/IMG_2549.mov",
+        "assets/reading-hour-shoot/IMG_2545.mov",
+        "assets/reading-hour-shoot/IMG_2547.mov"
+      ],
+      "recommendation_type": "remove_asset",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "expected_changes": "Drop clip IMG_2549.mov from the Ritual Reel source list. Do not overwrite the existing render until a rebuild is approved."
+    },
+    {
+      "recommendation_id": "rec_ritual_rebuild_two_clip",
+      "title": "Rebuild Ritual Reel with IMG_2545 and IMG_2547",
+      "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+      "rationale": "Clips 1 and 2 are visually coherent. A tighter two-clip reel will hold better than the current three-clip structure.",
+      "affected_asset": "Ritual Reel",
+      "affected_files": [
+        "ritual_reel/ritual_reel_draft.mp4",
+        "ritual_reel/caption.md",
+        "assets/reading-hour-shoot/IMG_2549.mov",
+        "assets/reading-hour-shoot/IMG_2545.mov",
+        "assets/reading-hour-shoot/IMG_2547.mov"
+      ],
+      "recommendation_type": "rerender",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "expected_changes": "Render a new versioned Ritual Reel using only IMG_2545.mov and IMG_2547.mov. Keep the original output."
+    },
+    {
+      "recommendation_id": "rec_ritual_cta_10_12",
+      "title": "Move Ritual Reel CTA to seconds 10\u201312",
+      "full_instruction": "Remove IMG_2549 from the ritual_reel entirely and rebuild as a two-clip sequence using only IMG_2545 and IMG_2547. The resolution drop (960x528), color temperature shift, and salt-lamp aesthetic of IMG_2549 break visual consistency and undercut the Upper West Side literary apartment register the brand requires. A tighter 13\u201315 second two-clip reel with the CTA appearing by second 10 will outperform the current 25-second three-clip structure on Reels \u2014 and will not require the 'careful crop work' workaround that signals the asset was never right for this context.",
+      "rationale": "CTA at ~22.5s of a 25s video is too late for Reels; most viewers will never see the ask.",
+      "affected_asset": "Ritual Reel",
+      "affected_files": [
+        "ritual_reel/ritual_reel_draft.mp4",
+        "ritual_reel/caption.md",
+        "assets/reading-hour-shoot/IMG_2549.mov",
+        "assets/reading-hour-shoot/IMG_2545.mov",
+        "assets/reading-hour-shoot/IMG_2547.mov"
+      ],
+      "recommendation_type": "change_timing",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "expected_changes": "Set Join the waitlist overlay to appear at seconds 10\u201312 in the new versioned output."
+    },
+    {
+      "recommendation_id": "rec_copy_rewrite_package",
+      "title": "Revise Ritual Reel caption and Page Turn Loop hook",
+      "full_instruction": "Rewrite the page_turn_loop hook and the ritual_reel caption before publishing either piece. 'This is what your afternoon could feel like' is conditional and generic \u2014 it must be replaced with a line that names the specific feeling rather than promising one. The ritual_reel caption's opening paragraph ('Oh Betty Jaletti is a literary lifestyle brand built around that hour') is founder-update voice and must be cut; the caption should open on the ritual itself ('A book you've been saving. A drink that's just right.') and let the brand name appear only in the closing CTA line. The Pinterest caption keyword dump must be replaced entirely \u2014 it will attract the wrong audience and is directly contrary to brand voice.",
+      "rationale": "Founder-update caption voice and a generic Page Turn hook dilute brand desire.",
+      "affected_asset": "Campaign",
+      "affected_files": [],
+      "recommendation_type": "revise_copy",
+      "priority": "medium",
+      "status": "approved",
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "expected_changes": "Caption and hook rewrites require editorial judgment. Mark as manual completion unless exact replacement copy is supplied."
+    }
+  ]
+}

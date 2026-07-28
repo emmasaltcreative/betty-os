@@ -1,0 +1,252 @@
+{
+  "brand_id": "oh_betty_jaletti",
+  "updated_at": "2026-07-28T18:36:44+00:00",
+  "capabilities": {
+    "Brand Asset Upload": {
+      "name": "Brand Asset Upload",
+      "status": "Planned",
+      "implementation_note": "Persistent upload under brands/*/studio/assets.",
+      "known_limitation": "",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "SVG Logo Preview": {
+      "name": "SVG Logo Preview",
+      "status": "Partial",
+      "implementation_note": "SVG stored and previewed when rsvg-convert or cairosvg is available.",
+      "known_limitation": "Without a rasterizer, upload transparent PNG for compositing.",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "Static Logo Placement": {
+      "name": "Static Logo Placement",
+      "status": "Ready",
+      "implementation_note": "Pillow alpha compositing on static images.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Video Logo Placement": {
+      "name": "Video Logo Placement",
+      "status": "Ready",
+      "implementation_note": "FFmpeg overlay with timing enable expressions.",
+      "known_limitation": "Requires FFmpeg.",
+      "last_successful_test": {
+        "at": "2026-07-28T18:18:01+00:00",
+        "note": "finish_v002"
+      },
+      "last_failure": null
+    },
+    "Static Lighting Adjustments": {
+      "name": "Static Lighting Adjustments",
+      "status": "Ready",
+      "implementation_note": "Exposure/brightness/contrast/highlights/shadows/whites/blacks/gamma.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Static Color Adjustments": {
+      "name": "Static Color Adjustments",
+      "status": "Ready",
+      "implementation_note": "Temperature/tint/sat/vibrance/fade/lift/RGB balance.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Static Grain": {
+      "name": "Static Grain",
+      "status": "Ready",
+      "implementation_note": "Seeded numpy grain at final resolution.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Static Vignette": {
+      "name": "Static Vignette",
+      "status": "Ready",
+      "implementation_note": "Soft radial vignette with feather/midpoint.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Static Sharpening": {
+      "name": "Static Sharpening",
+      "status": "Ready",
+      "implementation_note": "Pillow sharpness enhance.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:58+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Crop and Resize": {
+      "name": "Crop and Resize",
+      "status": "Ready",
+      "implementation_note": "Crop, rotate, straighten, aspect fit/fill/pad.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:59+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Color Recipes": {
+      "name": "Color Recipes",
+      "status": "Ready",
+      "implementation_note": "Persistent brand recipes with version history.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T18:18:01+00:00",
+        "note": "obj_rainy_reading"
+      },
+      "last_failure": null
+    },
+    "Static .cube LUT": {
+      "name": "Static .cube LUT",
+      "status": "Planned",
+      "implementation_note": "Parsed .cube applied with trilinear blend + intensity.",
+      "known_limitation": "",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "Video .cube LUT": {
+      "name": "Video .cube LUT",
+      "status": "Ready",
+      "implementation_note": "FFmpeg lut3d when filter is present.",
+      "known_limitation": "Intensity blend not available in FFmpeg path.",
+      "last_successful_test": {
+        "at": "2026-07-28T13:50:03+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Video Color Adjustment": {
+      "name": "Video Color Adjustment",
+      "status": "Ready",
+      "implementation_note": "FFmpeg eq + colorbalance approximation.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:50:03+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Video Grain": {
+      "name": "Video Grain",
+      "status": "Ready",
+      "implementation_note": "FFmpeg noise filter.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:50:03+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Video Vignette": {
+      "name": "Video Vignette",
+      "status": "Planned",
+      "implementation_note": "FFmpeg vignette filter.",
+      "known_limitation": "",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "Video Sharpening": {
+      "name": "Video Sharpening",
+      "status": "Planned",
+      "implementation_note": "FFmpeg unsharp.",
+      "known_limitation": "",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "Video Audio Normalization": {
+      "name": "Video Audio Normalization",
+      "status": "Ready",
+      "implementation_note": "dynaudnorm when audio exists.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T18:18:01+00:00",
+        "note": "finish_v002"
+      },
+      "last_failure": null
+    },
+    "Before-and-After Static Preview": {
+      "name": "Before-and-After Static Preview",
+      "status": "Planned",
+      "implementation_note": "Original vs processed proxy preview.",
+      "known_limitation": "Proxy may differ slightly from full-res.",
+      "last_successful_test": null,
+      "last_failure": null
+    },
+    "Before-and-After Video Preview": {
+      "name": "Before-and-After Video Preview",
+      "status": "Ready",
+      "implementation_note": "Separate original/processed previews.",
+      "known_limitation": "Synchronized scrub not implemented.",
+      "last_successful_test": {
+        "at": "2026-07-28T18:09:57+00:00",
+        "note": "Processed preview frame"
+      },
+      "last_failure": null
+    },
+    "Finished-Version Persistence": {
+      "name": "Finished-Version Persistence",
+      "status": "Ready",
+      "implementation_note": "Immutable finish_vNNN directories with atomic move.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T18:18:01+00:00",
+        "note": "finish_v002"
+      },
+      "last_failure": null
+    },
+    "Static Downloads": {
+      "name": "Static Downloads",
+      "status": "Ready",
+      "implementation_note": "Download finished PNG/JPG/WebP when file validates.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T13:48:59+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Video Downloads": {
+      "name": "Video Downloads",
+      "status": "Ready",
+      "implementation_note": "Download finished MP4 when file validates.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T18:18:01+00:00",
+        "note": "finish_v002"
+      },
+      "last_failure": null
+    },
+    "Studio Package Download": {
+      "name": "Studio Package Download",
+      "status": "Ready",
+      "implementation_note": "ZIP of output, preview, config, validation, metadata.",
+      "known_limitation": "",
+      "last_successful_test": {
+        "at": "2026-07-28T18:36:44+00:00",
+        "note": "finish_v001"
+      },
+      "last_failure": null
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "luts": [
+    {
+      "lut_id": "lut_36c4df6a3b",
+      "brand_id": "oh_betty_jaletti",
+      "display_name": "Identity Soft",
+      "file_path": "brands/oh_betty_jaletti/studio/luts/lut_36c4df6a3b_identity.cube",
+      "original_filename": "identity.cube",
+      "format": "cube",
+      "cube_size": 2,
+      "domain_min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "domain_max": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "default_intensity": 1.0,
+      "suitable_use_cases": [
+        "editorial",
+        "film_character"
+      ],
+      "status": "Ready",
+      "created_at": "2026-07-28T13:48:59+00:00",
+      "updated_at": "2026-07-28T13:48:59+00:00",
+      "validation_notes": ""
+    }
+  ],
+  "brand_id": "oh_betty_jaletti",
+  "updated_at": "2026-07-28T13:48:59+00:00"
+}

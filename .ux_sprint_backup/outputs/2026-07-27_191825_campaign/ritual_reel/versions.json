@@ -1,0 +1,35 @@
+{
+  "piece": "ritual_reel",
+  "versions": [
+    {
+      "version": 1,
+      "filename": "ritual_reel_v1.mp4",
+      "parent_version": null,
+      "revision_request_id": null,
+      "revision_request_ids": [],
+      "created_at": "2026-07-27T20:01:53-04:00",
+      "review_status": "awaiting_review",
+      "addressed_recommendation_ids": [],
+      "source_draft": "ritual_reel_draft.mp4"
+    },
+    {
+      "version": 2,
+      "filename": "ritual_reel_v2.mp4",
+      "parent_version": 1,
+      "revision_request_id": "rev_6c67b19470",
+      "revision_request_ids": [
+        "rev_6c67b19470",
+        "rev_04c8e1d9c2",
+        "rev_e2d10fc638"
+      ],
+      "created_at": "2026-07-27T20:02:35-04:00",
+      "review_status": "approved",
+      "addressed_recommendation_ids": [
+        "rec_ritual_remove_2549",
+        "rec_ritual_rebuild_two_clip",
+        "rec_ritual_cta_10_12"
+      ]
+    }
+  ],
+  "current_version": 2
+}
