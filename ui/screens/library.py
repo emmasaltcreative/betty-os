@@ -35,6 +35,7 @@ from studio.luts import (
     validate_lut_record,
 )
 from ui.capability import effective_status, renderability, template_note
+from ui import nav
 from ui.components import (
     Stat,
     blocked_state,
@@ -68,22 +69,72 @@ CATEGORY_LABELS = (
 
 
 def render() -> None:
-    page_header("Library", "Reference material, brand assets, and LUTs.")
-    assets_tab, brand_assets_tab, luts_tab, templates_tab, brand_tab, rules_tab = st.tabs(
-        ["Assets", "Brand Assets", "LUTs", "Templates", "Brand Guide", "Production Rules"]
+    page_header("Library", "Reference material, brand setup, and production guidance.")
+
+    # Resume banner when returning from an interrupted workflow.
+    interrupted = st.session_state.get(nav.INTERRUPTED_FLOW)
+    if isinstance(interrupted, dict) and interrupted.get("return_to") == "workspace":
+        with st.container(border=True):
+            quiet("You were in the middle of creating. Return when the brand asset is ready.")
+            if st.button("Resume campaign", type="primary", key="lib_resume"):
+                nav.goto_workspace(
+                    interrupted.get("stage") or "create",
+                    piece_id=interrupted.get("piece_id"),
+                    version_key=interrupted.get("version_key"),
+                )
+
+    assets_tab, brand_setup_tab, templates_tab, brand_tab, rules_tab = st.tabs(
+        ["Assets", "Brand Setup", "Templates", "Brand Guide", "Production Rules"]
     )
     with assets_tab:
         _assets()
-    with brand_assets_tab:
-        _brand_assets()
-    with luts_tab:
-        _luts()
+    with brand_setup_tab:
+        _brand_setup()
     with templates_tab:
         _templates()
     with brand_tab:
         _brand()
     with rules_tab:
         _rules()
+
+
+def _brand_setup() -> None:
+    """Completeness checklist + brand mark upload (formerly Brand Assets + LUTs)."""
+    from studio.brand_assets import ROLE_LABELS, list_assets
+
+    section("Brand Setup", "What BettyOS needs to finish work with confidence.")
+    assets = list_assets(DEFAULT_BRAND_ID, include_archived=False)
+    by_role = {a.role: a for a in assets if getattr(a, "role", None)}
+
+    checklist = [
+        ("Brand Guide", _brand_guide_ready(), False),
+        ("Production Rules", _rules_ready(), False),
+        ("Primary Logo", "primary" in by_role or "wordmark" in by_role, False),
+        ("Secondary Logo or Wordmark", "secondary" in by_role or "wordmark" in by_role, True),
+        ("Light Logo", "light" in by_role, True),
+        ("Dark Logo", "dark" in by_role, True),
+        ("Optional Emblem or Monogram", "emblem" in by_role or "monogram" in by_role, True),
+    ]
+    rows = []
+    for label, ready, optional in checklist:
+        if ready:
+            status = "Ready"
+        elif optional:
+            status = "Optional"
+        else:
+            status = "Missing"
+        rows.append((label, status))
+    key_values(rows)
+
+    st.write("")
+    _brand_assets()
+
+    with st.expander("Color treatments (LUTs)", expanded=False):
+        quiet("Optional. BettyOS manages finishing automatically; LUTs are for advanced brand setup.")
+        _luts()
+
+    with st.expander("Advanced Brand Asset Rules", expanded=False):
+        quiet("Placement opacity, size, and safe-margin rules. Not required for initial setup.")
 
 
 # --- Assets -----------------------------------------------------------------
@@ -289,6 +340,18 @@ def _planned_definition() -> None:
 
 # --- Brand guide ------------------------------------------------------------
 
+def _brand_guide_ready() -> bool:
+    documents = load_brand_documents()
+    return any(
+        text.strip() and text.strip() != "_Not written yet._"
+        for text in documents.values()
+    )
+
+
+def _rules_ready() -> bool:
+    return bool(production_rules())
+
+
 def _brand() -> None:
     documents = load_brand_documents()
     written = {
@@ -384,7 +447,15 @@ def _brand_assets() -> None:
             if suffix == ".svg":
                 record_success("SVG Logo Preview", record.asset_id, DEFAULT_BRAND_ID)
             st.success(f"Saved {record.display_name}")
-            st.rerun()
+            interrupted = st.session_state.get(nav.INTERRUPTED_FLOW)
+            if isinstance(interrupted, dict) and interrupted.get("return_to") == "workspace":
+                nav.goto_workspace(
+                    interrupted.get("stage") or "create",
+                    piece_id=interrupted.get("piece_id"),
+                    version_key=interrupted.get("version_key"),
+                )
+            else:
+                st.rerun()
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))
         finally:

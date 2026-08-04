@@ -838,88 +838,99 @@ def _next_step(
     revisions: dict[str, int],
     counts: dict[str, int],
 ) -> NextStep:
+    """Legacy next-step helper. Prefer `ui.continue_campaign.resolve_continuation`."""
     if not has_campaign:
         return NextStep(
-            "Open a campaign",
+            "Start a Campaign",
             "Campaigns",
             "Choose or create a campaign to begin.",
         )
     if not pieces:
         return NextStep(
-            "Add campaign content",
-            "Create",
-            "This campaign has no content pieces yet.",
-            tab="Content",
+            "Set Campaign Goal",
+            "workspace",
+            "This campaign has no content plan yet.",
+            tab="brief",
+        )
+    if any(p.status_key == "missing_inputs" for p in pieces) and not versions:
+        return NextStep(
+            "View Shot List",
+            "workspace",
+            "Footage is needed before a draft can be created.",
+            tab="capture",
         )
     if counts["ready_to_render"]:
         ready = counts["ready_to_render"]
         verb = "is" if ready == 1 else "are"
         return NextStep(
-            "Create renders",
-            "Create",
-            f"{count_phrase(ready, 'content piece')} {verb} ready to render.",
-            tab="Content",
+            "Create Best Draft",
+            "workspace",
+            f"{count_phrase(ready, 'content piece')} {verb} ready to create.",
+            tab="create",
         )
     if not versions:
         return NextStep(
-            "Create renders",
-            "Create",
-            "No renders exist yet.",
-            tab="Content",
+            "Create Best Draft",
+            "workspace",
+            "No drafts exist yet.",
+            tab="create",
             actionable=not all(p.status_key in {"unsupported", "missing_inputs"} for p in pieces),
         )
     if not _campaign_has_finish(versions):
         return NextStep(
-            "Finish in Studio",
-            "Studio",
-            "Apply brand finishing before creative review, or open Studio to refine a render.",
+            "Create Best Draft",
+            "workspace",
+            "Apply brand finishing and Creative Director Review.",
+            tab="create",
         )
     if not review_current:
         return NextStep(
-            "Run Creative Review",
-            "Review",
-            "Renders have not been reviewed since they were created.",
-            tab="Creative Review",
+            "Review Draft",
+            "workspace",
+            "A draft is ready for your judgment.",
+            tab="decide",
         )
     if revisions["ready_to_apply"]:
         chosen = revisions["ready_to_apply"]
         verb = "is" if chosen == 1 else "are"
         return NextStep(
-            "Apply chosen revisions",
-            "Revisions",
-            f"{count_phrase(chosen, 'revision')} {verb} chosen and waiting for your approval.",
-            tab="Revisions",
+            "Apply Revision",
+            "workspace",
+            f"{count_phrase(chosen, 'requested change')} {verb} ready to apply.",
+            tab="decide",
         )
     if revisions["awaiting_decision"]:
         open_count = revisions["awaiting_decision"]
         verb = "is" if open_count == 1 else "are"
         return NextStep(
-            "Choose a revision",
-            "Revisions",
-            f"{count_phrase(open_count, 'revision')} {verb} waiting on a decision.",
-            tab="Revisions",
+            "Request Changes",
+            "workspace",
+            f"{count_phrase(open_count, 'requested change')} {verb} waiting on a decision.",
+            tab="decide",
         )
     if counts["awaiting_approval"] or counts["needs_revision"]:
         pending = counts["awaiting_approval"] + counts["needs_revision"]
         verb = "needs" if pending == 1 else "need"
         return NextStep(
-            "Approve renders",
-            "Approvals",
-            f"{count_phrase(pending, 'render version')} {verb} a decision.",
+            "Approve or Request Changes",
+            "workspace",
+            f"{count_phrase(pending, 'draft')} {verb} a decision.",
+            tab="decide",
         )
     if counts["approved"]:
         approved = counts["approved"]
         verb = "is" if approved == 1 else "are"
         return NextStep(
-            "Create export package",
-            "Export",
-            f"{count_phrase(approved, 'approved render')} {verb} ready to export.",
+            "Download Package",
+            "workspace",
+            f"{count_phrase(approved, 'approved draft')} {verb} ready to deliver.",
+            tab="deliver",
         )
     return NextStep(
-        "Review the campaign",
-        "Review",
+        "Review Draft",
+        "workspace",
         "Nothing is approved yet.",
-        tab="Creative Review",
+        tab="decide",
     )
 
 
@@ -952,27 +963,32 @@ def _steps(
     export_count: int,
     blockers: list[str],
 ) -> list[WorkflowStep]:
+    """Founder-facing rail: Brief → Plan → Capture → Create → Decide → Deliver."""
+    missing = any(p.status_key == "missing_inputs" for p in pieces)
+    has_finish = _campaign_has_finish(versions)
+    decide_clear = (
+        counts["awaiting_approval"] == 0
+        and counts["needs_revision"] == 0
+        and revisions["awaiting_decision"] == 0
+        and revisions["ready_to_apply"] == 0
+    )
     complete = {
         "brief": has_campaign,
-        "content": bool(pieces),
-        "create": bool(versions) and counts["ready_to_render"] == 0,
-        "studio": _campaign_has_finish(versions),
-        "review": bool(versions) and review_current,
-        "revise": revisions["awaiting_decision"] == 0 and revisions["ready_to_apply"] == 0,
-        "approve": counts["approved"] > 0
-        and counts["awaiting_approval"] == 0
-        and counts["needs_revision"] == 0,
-        "export": export_count > 0,
+        "plan": bool(pieces),
+        "capture": bool(pieces) and not missing,
+        "create": bool(versions) and has_finish and counts["ready_to_render"] == 0,
+        "decide": bool(versions) and has_finish and decide_clear and counts["approved"] > 0,
+        "deliver": export_count > 0,
     }
     blocked = {
+        "capture": missing and not versions,
         "create": bool(pieces)
         and not versions
         and all(p.status_key in {"unsupported", "missing_inputs"} for p in pieces),
-        # A revision waiting on footage or a photograph cannot move until it arrives.
-        "revise": revisions["needs_human"] > 0
+        "decide": revisions["needs_human"] > 0
         and revisions["awaiting_decision"] == 0
         and revisions["ready_to_apply"] == 0,
-        "export": counts["approved"] == 0 and export_count == 0,
+        "deliver": counts["approved"] == 0 and export_count == 0,
     }
 
     from ui.status import WORKFLOW_STEPS

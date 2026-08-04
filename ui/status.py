@@ -31,14 +31,16 @@ def _index(statuses: tuple[Status, ...]) -> dict[str, Status]:
 # --- Campaign ---------------------------------------------------------------
 
 CAMPAIGN_STATUSES: tuple[Status, ...] = (
-    Status("planning", "Planning", NEUTRAL, "Brief captured, no content generated yet."),
-    Status("creating", "Creating", ACTIVE, "Content exists and is being rendered."),
-    Status("reviewing", "Reviewing", ACTIVE, "Renders exist and are waiting on creative review."),
-    Status("revising", "Revising", ACTIVE, "Approved revisions are waiting to be run."),
-    Status("awaiting_approval", "Awaiting Approval", ATTENTION, "Renders need a final decision."),
-    Status("approved", "Approved", POSITIVE, "At least one render is approved and ready to export."),
-    Status("exported", "Exported", POSITIVE, "An export package has been created."),
+    Status("planning", "Planning", NEUTRAL, "Brief captured, content direction still forming."),
+    Status("creating", "Creating", ACTIVE, "BettyOS is selecting, editing, and finishing a draft."),
+    Status("reviewing", "Ready for Review", ATTENTION, "A draft is waiting for Creative Director judgment."),
+    Status("revising", "Revising", ACTIVE, "A requested change is being applied."),
+    Status("awaiting_approval", "Ready for Approval", ATTENTION, "A finished draft needs your decision."),
+    Status("approved", "Ready to Deliver", POSITIVE, "Approved work is ready to package."),
+    Status("exported", "Complete", POSITIVE, "A publishing package has been created."),
     Status("blocked", "Blocked", BLOCKED, "Something must be fixed before work can continue."),
+    # Founder-facing aliases used by the Continue Campaign resolver.
+    Status("waiting_for_footage", "Waiting for Footage", ATTENTION, "Human-created footage or assets are needed."),
 )
 
 CAMPAIGN_STAGE_ORDER = tuple(s.key for s in CAMPAIGN_STATUSES if s.key != "blocked")
@@ -49,16 +51,16 @@ _CAMPAIGN = _index(CAMPAIGN_STATUSES)
 # --- Content piece ----------------------------------------------------------
 
 CONTENT_STATUSES: tuple[Status, ...] = (
-    Status("draft", "Draft", NEUTRAL, "Written, no template assigned yet."),
-    Status("ready_to_render", "Ready to Render", ATTENTION, "Everything needed is in place."),
-    Status("missing_inputs", "Missing Inputs", BLOCKED, "Required source files or copy are missing."),
-    Status("rendering", "Rendering", ACTIVE, "A render is running now."),
-    Status("rendered", "Rendered", POSITIVE, "A render exists and can be reviewed."),
-    Status("needs_revision", "Needs Revision", ATTENTION, "A reviewer asked for changes."),
-    Status("awaiting_approval", "Awaiting Approval", ATTENTION, "Waiting on a final decision."),
-    Status("approved", "Approved", POSITIVE, "Signed off and exportable."),
+    Status("draft", "Planned", NEUTRAL, "Written into the campaign plan."),
+    Status("ready_to_render", "Planned", ATTENTION, "Everything needed is in place to create."),
+    Status("missing_inputs", "Needs Footage", BLOCKED, "Required source footage or assets are missing."),
+    Status("rendering", "Creating", ACTIVE, "A draft is being created now."),
+    Status("rendered", "Draft Ready", POSITIVE, "A draft exists and can be reviewed."),
+    Status("needs_revision", "Needs Revision", ATTENTION, "A change was requested."),
+    Status("awaiting_approval", "Draft Ready", ATTENTION, "Waiting on your decision."),
+    Status("approved", "Approved", POSITIVE, "Signed off and ready to deliver."),
     Status("rejected", "Rejected", BLOCKED, "Will not be used."),
-    Status("unsupported", "Not Supported", BLOCKED, "No working template can produce this piece."),
+    Status("unsupported", "Blocked", BLOCKED, "No working template can produce this piece yet."),
 )
 
 _CONTENT = _index(CONTENT_STATUSES)
@@ -203,25 +205,41 @@ def priority_status(raw: str) -> Status:
 
 # --- Workflow steps ---------------------------------------------------------
 
+# Founder-facing campaign workspace progression.
 WORKFLOW_STEPS: tuple[tuple[str, str], ...] = (
     ("brief", "Brief"),
-    ("content", "Content"),
+    ("plan", "Plan"),
+    ("capture", "Capture"),
     ("create", "Create"),
-    ("studio", "Studio"),
-    ("review", "Review"),
-    ("revise", "Revise"),
-    ("approve", "Approve"),
-    ("export", "Export"),
+    ("decide", "Decide"),
+    ("deliver", "Deliver"),
+)
+
+# Legacy keys still produced by older campaign_state helpers during transition.
+LEGACY_WORKFLOW_STEPS: tuple[tuple[str, str], ...] = (
+    ("brief", "Brief"),
+    ("content", "Plan"),
+    ("create", "Create"),
+    ("studio", "Create"),
+    ("review", "Decide"),
+    ("revise", "Decide"),
+    ("approve", "Decide"),
+    ("export", "Deliver"),
 )
 
 # Which product area each workflow step belongs to.
 STEP_DESTINATION = {
-    "brief": "Campaigns",
-    "content": "Create",
-    "create": "Create",
-    "studio": "Studio",
-    "review": "Review",
-    "revise": "Revisions",
-    "approve": "Approvals",
-    "export": "Export",
+    "brief": "workspace",
+    "plan": "workspace",
+    "capture": "workspace",
+    "create": "workspace",
+    "decide": "workspace",
+    "deliver": "workspace",
+    # Legacy aliases
+    "content": "workspace",
+    "studio": "workspace",
+    "review": "workspace",
+    "revise": "workspace",
+    "approve": "workspace",
+    "export": "workspace",
 }
