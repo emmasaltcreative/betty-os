@@ -34,12 +34,45 @@ from ui.continue_campaign import (
 from ui.journal import journal_for_campaign
 from ui.status import Status, campaign_status
 from ui.workflow_service import copy_fields_for_piece, render_piece, save_version_decision
-from ui.export_service import build_plan, create_export_package, list_existing_packages
+from ui.export_service import (
+    PUBLISHING_MODE,
+    build_plan,
+    create_export_package,
+    human_size,
+    list_existing_packages,
+)
 
 
 STAGE_OPTIONS = [label for _, label in WORKSPACE_STAGES]
 STAGE_KEYS = {label: key for key, label in WORKSPACE_STAGES}
 KEY_TO_LABEL = {key: label for key, label in WORKSPACE_STAGES}
+
+# Widget-backed key must stay distinct from internal workflow / pending navigation keys.
+STAGE_WIDGET_KEY = "workspace_stage_selector"
+STAGE_STATE_KEY = "workspace_stage"
+
+
+def _sync_stage_before_widget(default_label: str) -> str:
+    """Apply pending navigation and defaults before the stage widget exists.
+
+    Streamlit forbids writing a widget's session_state key after that widget is
+    instantiated. Pending deep-links (Today → Decide, etc.) must land on the
+    selector key here, ahead of `step_selector`.
+    """
+    pending = nav.take_pending_stage(STAGE_OPTIONS)
+    if pending:
+        st.session_state[STAGE_STATE_KEY] = pending
+        st.session_state[STAGE_WIDGET_KEY] = pending
+        return pending
+
+    current = st.session_state.get(STAGE_STATE_KEY)
+    if current not in STAGE_OPTIONS:
+        current = default_label
+        st.session_state[STAGE_STATE_KEY] = current
+
+    if st.session_state.get(STAGE_WIDGET_KEY) not in STAGE_OPTIONS:
+        st.session_state[STAGE_WIDGET_KEY] = current
+    return current
 
 
 def render(state: CampaignState) -> None:
@@ -69,13 +102,14 @@ def render(state: CampaignState) -> None:
             st.session_state[nav.FOCUS_VERSION] = interrupted["version_key"]
 
     default_label = KEY_TO_LABEL.get(continuation.current_stage, "Plan")
-    if st.session_state.get("workspace_stage") not in STAGE_OPTIONS:
-        st.session_state["workspace_stage"] = default_label
-    selected = nav.step_selector("Stage", STAGE_OPTIONS, key="workspace_stage")
-    pending = nav.take_pending_stage(STAGE_OPTIONS)
-    if pending:
-        selected = pending
-        st.session_state["workspace_stage"] = pending
+    _sync_stage_before_widget(default_label)
+    selected = nav.step_selector("Stage", STAGE_OPTIONS, key=STAGE_WIDGET_KEY)
+    # Reflect the widget choice into the internal workflow key only — never write
+    # back to STAGE_WIDGET_KEY after the selector exists.
+    if selected in STAGE_OPTIONS:
+        st.session_state[STAGE_STATE_KEY] = selected
+    else:
+        selected = st.session_state.get(STAGE_STATE_KEY, default_label)
 
     stage_key = STAGE_KEYS.get(selected, continuation.current_stage)
     nav.persist_workspace_context(state.path, stage=stage_key)
@@ -659,52 +693,104 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
             nav.goto_workspace("decide")
         return
 
-    plan = build_plan(state, mode="approved", selected_keys=set())
+    plan = build_plan(state, mode=PUBLISHING_MODE, selected_keys=set())
+    summary = plan.summary
     with st.container(border=True):
-        quiet("Included:")
-        included = list(getattr(plan, "included", None) or [])
-        for item in included[:8]:
-            st.markdown(f"- {item.label}")
-        if not included:
-            for version in approved:
-                st.markdown(f"- {state.describe(version)}")
-            quiet("- Caption and publishing notes when present")
-
-        excluded = list(getattr(plan, "excluded", None) or [])
-        if excluded:
-            st.write("")
-            quiet("Excluded: rejected or superseded drafts.")
+        if plan.is_blocked or plan.is_empty:
+            st.markdown("**Publishing package blocked**")
+            for blocker in plan.blockers or ["No publishable final assets."]:
+                quiet(blocker)
+        else:
+            st.markdown("**Publishing package ready**")
 
         st.write("")
-        if st.button("Download Publishing Package", type="primary", key="ws_download"):
-            result = create_export_package(state, mode="approved", selected_keys=set())
-            if result.ok and result.path:
-                st.session_state["betty_flash"] = "Publishing package ready."
-                st.download_button(
-                    "Save ZIP",
-                    data=Path(result.path).read_bytes(),
-                    file_name=Path(result.path).name,
-                    mime="application/zip",
-                    type="primary",
-                    key="ws_zip_dl",
-                )
-            else:
-                report(result)
+        quiet("Included:")
+        if summary.included_lines:
+            for line in summary.included_lines:
+                st.markdown(f"- {line}")
+        elif plan.included:
+            for item in plan.included:
+                st.markdown(f"- {item.label}")
+        else:
+            quiet("Nothing publishable yet.")
 
-        if st.button("View Package Contents", key="ws_pkg_contents"):
-            st.session_state["ws_show_plan"] = True
-            st.rerun()
+        if summary.excluded_lines or plan.excluded:
+            st.write("")
+            quiet("Excluded:")
+            for line in summary.excluded_lines[:12]:
+                st.markdown(f"- {line}")
+            if len(summary.excluded_lines) > 12:
+                quiet(f"…and {len(summary.excluded_lines) - 12} more.")
+
+        if plan.warnings:
+            st.write("")
+            note("Warnings")
+            for warning in plan.warnings:
+                quiet(warning)
+            acknowledge = st.checkbox(
+                "I understand these warnings",
+                key="ws_ack_warnings",
+            )
+        else:
+            acknowledge = True
+
+        st.write("")
+        cols = st.columns([1, 1])
+        with cols[0]:
+            create_disabled = plan.is_empty or plan.is_blocked or (
+                plan.validation_status == "ready_with_warnings" and not acknowledge
+            )
+            if st.button(
+                "Create Publishing Package",
+                type="primary",
+                key="ws_download",
+                disabled=create_disabled,
+            ):
+                result = create_export_package(
+                    state,
+                    mode=PUBLISHING_MODE,
+                    selected_keys=set(),
+                    acknowledge_warnings=acknowledge,
+                )
+                if result.ok and result.path:
+                    st.session_state["betty_flash"] = "Publishing package ready."
+                    st.session_state["ws_last_export"] = str(result.path)
+                    st.rerun()
+                else:
+                    report(result)
+        with cols[1]:
+            if st.button("Review Exclusions", key="ws_pkg_contents"):
+                st.session_state["ws_show_plan"] = True
+                st.rerun()
+
+        last = st.session_state.get("ws_last_export")
+        if last and Path(last).is_file():
+            st.write("")
+            st.download_button(
+                "Save ZIP",
+                data=Path(last).read_bytes(),
+                file_name=Path(last).name,
+                mime="application/zip",
+                type="primary",
+                key="ws_zip_dl",
+            )
+            quiet(f"{Path(last).name} · {human_size(Path(last).stat().st_size)}")
 
     if st.session_state.get("ws_show_plan"):
-        with st.expander("Package contents", expanded=True):
+        with st.expander("Exclusions and lineage", expanded=True):
             key_values(
                 [
-                    ("Approved drafts", len(approved)),
+                    ("Publishable items", len(plan.included)),
+                    ("Excluded", len(plan.excluded)),
+                    ("Duplicates removed", len(plan.duplicates_removed)),
                     ("Earlier packages", len(list_existing_packages(state))),
                 ]
             )
-            for item in included:
-                quiet(item.label)
+            for item in plan.included:
+                lineage = item.finish_version_id or item.render_version_id or ""
+                quiet(f"{item.label} · {item.platform} · {lineage}")
+            for exclusion in plan.excluded:
+                quiet(f"{exclusion.label} — {exclusion.reason}")
 
     packages = list_existing_packages(state)
     if packages:

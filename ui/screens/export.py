@@ -1,4 +1,4 @@
-"""Export — bundle finished work into one downloadable package."""
+"""Export — build a publishing package or an archive dump."""
 
 from __future__ import annotations
 
@@ -21,13 +21,14 @@ from ui.components import (
     stat_strip,
 )
 from ui.export_service import (
+    ARCHIVE_MODE,
     MODES,
+    PUBLISHING_MODE,
     build_plan,
     create_export_package,
     human_size,
     list_existing_packages,
 )
-from ui.status import content_status_for_approval
 
 RESULT_KEY = "export_result"
 MODE_KEYS = [key for key, _, _ in MODES]
@@ -36,7 +37,7 @@ MODE_HELP = {key: help_text for key, _, help_text in MODES}
 
 
 def render(state: CampaignState) -> None:
-    page_header("Export", "Package finished work and download it.")
+    page_header("Export", "Create a publishing package or an archive dump.")
     progress_rail(state.steps)
 
     if not state.exists:
@@ -81,49 +82,35 @@ def render(state: CampaignState) -> None:
         return
 
     mode = st.radio(
-        "What to include",
+        "Package type",
         options=MODE_KEYS,
         format_func=lambda key: MODE_LABELS[key],
         horizontal=True,
         key="export_mode",
+        index=0,
     )
     quiet(MODE_HELP[mode])
+    if mode == ARCHIVE_MODE:
+        note("Archive Package is for history and diagnostics. It is not the default publishing package.")
 
-    selected_keys = _selection(state) if mode == "selected" else None
-
-    plan = build_plan(state, mode=mode, selected_keys=selected_keys)
-    _plan_preview(plan)
-    _create(state, mode, selected_keys, plan)
+    plan = build_plan(state, mode=mode, selected_keys=None)
+    _plan_preview(plan, mode)
+    _create(state, mode, plan)
     st.write("")
     _existing(state)
 
 
-def _selection(state: CampaignState) -> set[str]:
-    section("Choose render versions")
-    chosen: set[str] = set()
-    with st.container(border=True):
-        for version in state.versions:
-            status = content_status_for_approval(version.approval_status)
-            if st.checkbox(
-                f"{state.describe(version)} — {status.label}",
-                key=f"export_pick_{version.key}",
-            ):
-                chosen.add(version.key)
-    if not chosen:
-        note("Nothing selected yet.")
-    return chosen
-
-
-def _plan_preview(plan) -> None:
-    section("What will be in the package")
+def _plan_preview(plan, mode: str) -> None:
+    section("Publishing package ready" if mode == PUBLISHING_MODE else "Archive contents")
     columns = st.columns([1, 1], gap="large")
+    summary = plan.summary
 
     with columns[0]:
         with st.container(border=True):
             st.markdown('<div class="betty-section">Included</div>', unsafe_allow_html=True)
-            if not plan.included:
-                quiet("Nothing matches this option yet.")
-            else:
+            if summary.included_lines:
+                item_list([(line, "") for line in summary.included_lines])
+            elif plan.included:
                 item_list(
                     [
                         (
@@ -131,14 +118,17 @@ def _plan_preview(plan) -> None:
                             f"{count_phrase(item.file_count, 'file')}, "
                             f"{human_size(item.total_bytes)}"
                             + (
-                                f" · includes {count_phrase(len(item.finish_files), 'Studio finish')}"
-                                if item.finish_files
+                                f" · {item.finish_version_id}"
+                                if item.finish_version_id
                                 else ""
                             ),
                         )
                         for item in plan.included
                     ]
                 )
+            else:
+                quiet("Nothing matches this option yet.")
+            if plan.included:
                 st.write("")
                 quiet(
                     f"{count_phrase(plan.file_count, 'file')} in total, about "
@@ -147,27 +137,56 @@ def _plan_preview(plan) -> None:
 
     with columns[1]:
         with st.container(border=True):
-            st.markdown('<div class="betty-section">Left out</div>', unsafe_allow_html=True)
-            if not plan.excluded:
-                quiet("Nothing is being left out.")
-            else:
+            st.markdown('<div class="betty-section">Excluded</div>', unsafe_allow_html=True)
+            if summary.excluded_lines:
+                item_list(
+                    [
+                        (line.split(" — ", 1)[0], line.split(" — ", 1)[1] if " — " in line else "")
+                        for line in summary.excluded_lines
+                    ]
+                )
+            elif plan.excluded:
                 item_list([(item.label, item.reason) for item in plan.excluded])
+            else:
+                quiet("Nothing is being left out.")
 
-    if plan.include_metadata:
-        note("Full Archive also includes render settings and version history files.")
+    if plan.warnings:
+        note("Warnings must be acknowledged before creating the package.")
+        for warning in plan.warnings:
+            quiet(warning)
+
+    if plan.blockers:
+        blocked_state("Package blocked", plan.blockers[0])
 
 
-def _create(state: CampaignState, mode: str, selected_keys: set[str] | None, plan) -> None:
-    disabled = plan.is_empty
+def _create(state: CampaignState, mode: str, plan) -> None:
+    acknowledge = True
+    if plan.validation_status == "ready_with_warnings" or plan.warnings:
+        acknowledge = st.checkbox(
+            "I understand the warnings listed above",
+            key="export_ack_warnings",
+        )
+
+    disabled = plan.is_empty or plan.is_blocked or (
+        plan.validation_status == "ready_with_warnings" and not acknowledge
+    )
+    primary_label = (
+        "Create Publishing Package" if mode == PUBLISHING_MODE else "Create Archive Package"
+    )
     if st.button(
-        "Create Export Package",
+        primary_label,
         type="primary",
         disabled=disabled,
         key="create_export",
-        help="Nothing is included yet." if disabled else None,
+        help="Nothing is included yet." if plan.is_empty else None,
     ):
         with st.status("Building the package…", expanded=True) as status:
-            result = create_export_package(state, mode=mode, selected_keys=selected_keys)
+            result = create_export_package(
+                state,
+                mode=mode,
+                selected_keys=None,
+                acknowledge_warnings=acknowledge,
+            )
             status.update(
                 label=result.message,
                 state="complete" if result.ok else "error",
@@ -199,7 +218,7 @@ def _create(state: CampaignState, mode: str, selected_keys: set[str] | None, pla
             item_list([(label, "") for label in result.included])
         if result.excluded:
             with st.expander(
-                f"Left out ({len(result.excluded)}) and why",
+                f"Excluded ({len(result.excluded)}) and why",
                 expanded=False,
             ):
                 item_list([(item.label, item.reason) for item in result.excluded])

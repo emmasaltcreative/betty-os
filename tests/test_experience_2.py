@@ -96,6 +96,58 @@ class NavigationReductionTests(unittest.TestCase):
         for key in ("brief", "plan", "capture", "create", "decide", "deliver"):
             self.assertEqual(STEP_DESTINATION[key], "workspace")
 
+    def test_pending_decide_stage_applied_before_widget(self) -> None:
+        """Opening Decide via pending stage must not write the widget key after instantiate."""
+        from ui.nav import PENDING_STAGE
+        from ui.screens.workspace import (
+            STAGE_OPTIONS,
+            STAGE_STATE_KEY,
+            STAGE_WIDGET_KEY,
+            _sync_stage_before_widget,
+        )
+
+        session: dict = {
+            PENDING_STAGE: "decide",
+            STAGE_STATE_KEY: "Plan",
+            STAGE_WIDGET_KEY: "Plan",
+        }
+
+        class _Session(dict):
+            """Minimal stand-in that records post-widget writes to the selector key."""
+
+            def __init__(self, data: dict, *, widget_created: list[bool]):
+                super().__init__(data)
+                self._widget_created = widget_created
+
+            def __setitem__(self, key, value):
+                if key == STAGE_WIDGET_KEY and self._widget_created and self._widget_created[0]:
+                    raise AssertionError(
+                        f"{STAGE_WIDGET_KEY} cannot be modified after the widget is instantiated"
+                    )
+                super().__setitem__(key, value)
+
+        widget_created = [False]
+        session_state = _Session(session, widget_created=widget_created)
+
+        with patch("ui.screens.workspace.st") as mock_st, patch("ui.nav.st") as mock_nav_st:
+            mock_st.session_state = session_state
+            mock_nav_st.session_state = session_state
+
+            label = _sync_stage_before_widget("Plan")
+            self.assertEqual(label, "Decide")
+            self.assertEqual(session_state[STAGE_STATE_KEY], "Decide")
+            self.assertEqual(session_state[STAGE_WIDGET_KEY], "Decide")
+            self.assertIsNone(session_state.get(PENDING_STAGE))
+
+            # Simulate the stage widget existing; subsequent widget-key writes must fail.
+            widget_created[0] = True
+            selected = session_state[STAGE_WIDGET_KEY]
+            self.assertEqual(selected, "Decide")
+            # Internal workflow key may still be updated after the widget exists.
+            session_state[STAGE_STATE_KEY] = selected
+            self.assertEqual(session_state[STAGE_STATE_KEY], "Decide")
+            self.assertIn(selected, STAGE_OPTIONS)
+
 
 class TodayResolverTests(unittest.TestCase):
     def test_no_active_campaign(self) -> None:
