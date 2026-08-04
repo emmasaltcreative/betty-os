@@ -11,6 +11,7 @@ from studio.paths import capabilities_path
 from studio.video_pipeline import ffmpeg_available, ffmpeg_supports_lut3d
 
 STUDIO_CAPABILITIES = [
+    "Automatic Best Edit",
     "Brand Asset Upload",
     "SVG Logo Preview",
     "Static Logo Placement",
@@ -40,6 +41,10 @@ STUDIO_CAPABILITIES = [
 
 def _defaults() -> dict[str, dict[str, Any]]:
     notes = {
+        "Automatic Best Edit": (
+            "One brand-informed generated finish with structured decision and execution report.",
+            "Selective AI cleanup is listed as unsupported unless a cleanup provider is configured.",
+        ),
         "Brand Asset Upload": ("Persistent upload under brands/*/studio/assets.", ""),
         "SVG Logo Preview": (
             "SVG stored and previewed when rsvg-convert or cairosvg is available.",

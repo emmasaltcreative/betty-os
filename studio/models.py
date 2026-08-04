@@ -350,6 +350,10 @@ class FinishRecord:
     failure_reason: str | None = None
     ffmpeg_command: list[str] | None = None
     technical_notes: dict[str, Any] = field(default_factory=dict)
+    edit_decision: dict[str, Any] = field(default_factory=dict)
+    execution_report: dict[str, Any] = field(default_factory=dict)
+    revision_note: str | None = None
+    creative_review_score: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

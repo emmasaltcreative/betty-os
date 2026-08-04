@@ -5,9 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from src.common import DEFAULT_BRAND_ID
 from studio import SUPPORTED_STATIC, SUPPORTED_VIDEO
+from studio.auto_edit import (
+    apply_revision_note_to_config,
+    build_edit_decision,
+    build_execution_report,
+)
 from studio.capabilities import record_failure, record_success
+from studio.edit_decision import EditDecision
 from studio.image_pipeline import process_preview_proxy, process_static_image
+from studio.learning import new_approval_event, record_approval_event
 from studio.models import FinishConfiguration
 from studio.package import build_studio_package
 from studio.validation import (
@@ -17,7 +25,12 @@ from studio.validation import (
     validate_source,
     warnings_need_ack,
 )
-from studio.versions import create_finished_version, update_finish_status
+from studio.versions import (
+    create_finished_version,
+    load_finish_config,
+    load_finish_record,
+    update_finish_status,
+)
 from studio.video_pipeline import process_video, probe_video
 
 
@@ -115,8 +128,13 @@ def create_finish(
     parent_finish_version_id: str | None,
     source_file: Path,
     config: FinishConfiguration,
-    brand_id: str,
+    brand_id: str = DEFAULT_BRAND_ID,
     progress: ProgressCb | None = None,
+    edit_decision: dict[str, Any] | None = None,
+    execution_report: dict[str, Any] | None = None,
+    revision_note: str | None = None,
+    creative_review_score: float | None = None,
+    auto_ack_warnings: bool = False,
 ) -> dict[str, Any]:
     def report(msg: str) -> None:
         if progress:
@@ -153,7 +171,20 @@ def create_finish(
     if summary["outcome"] == "fail":
         return {"ok": False, "error": "Validation failed.", "validation": summary}
 
-    pending = warnings_need_ack(source_items + cfg_items, config.acknowledged_warnings)
+    all_pre_items = source_items + cfg_items
+    if auto_ack_warnings:
+        warning_codes = [item.code for item in all_pre_items if item.outcome == "warning"]
+        for code in warning_codes:
+            if code not in config.acknowledged_warnings:
+                config.acknowledged_warnings.append(code)
+        if execution_report is not None:
+            execution_report = {
+                **execution_report,
+                "warnings_acknowledged": sorted(
+                    set((execution_report.get("warnings_acknowledged") or []) + warning_codes)
+                ),
+            }
+    pending = warnings_need_ack(all_pre_items, config.acknowledged_warnings)
     if pending:
         return {
             "ok": False,
@@ -227,6 +258,10 @@ def create_finish(
             media_type=media,
             config=config,
             process_fn=process_fn,
+            edit_decision=edit_decision,
+            execution_report=execution_report,
+            revision_note=revision_note,
+            creative_review_score=creative_review_score,
         )
     except Exception as exc:  # noqa: BLE001
         record_failure("Finished-Version Persistence", str(exc), brand_id)
@@ -272,9 +307,163 @@ def create_finish(
             record_success("Video Audio Normalization", record.finish_version_id, brand_id)
     if config.recipe_id:
         record_success("Color Recipes", config.recipe_id, brand_id)
+    if edit_decision:
+        record_success("Automatic Best Edit", record.finish_version_id, brand_id)
 
     report("Complete")
     return {"ok": True, "record": record, "validation": record.validation_results}
+
+
+def generate_best_edit(
+    *,
+    render_folder: Path,
+    campaign_id: str,
+    content_piece_id: str | None,
+    template_id: str,
+    parent_render_version_id: str,
+    source_file: Path,
+    brand_id: str = DEFAULT_BRAND_ID,
+    platform: str = "",
+    content_type: str = "",
+    campaign_goal: str = "",
+    overlay_copy: str = "",
+    cta_copy: str = "",
+    parent_finish_version_id: str | None = None,
+    progress: ProgressCb | None = None,
+) -> dict[str, Any]:
+    decision, config = build_edit_decision(
+        source_file=source_file,
+        brand_id=brand_id,
+        platform=platform,
+        content_type=content_type or template_id,
+        campaign_goal=campaign_goal,
+        template_id=template_id,
+        overlay_copy=overlay_copy,
+        cta_copy=cta_copy,
+    )
+    report = build_execution_report(decision, config)
+    result = create_finish(
+        render_folder=render_folder,
+        campaign_id=campaign_id,
+        content_piece_id=content_piece_id,
+        template_id=template_id,
+        parent_render_version_id=parent_render_version_id,
+        parent_finish_version_id=parent_finish_version_id,
+        source_file=source_file,
+        config=config,
+        brand_id=brand_id,
+        progress=progress,
+        edit_decision=decision.to_dict(),
+        execution_report=report.to_dict(),
+        creative_review_score=decision.creative_review_score,
+        auto_ack_warnings=True,
+    )
+    if result.get("ok"):
+        result["edit_decision"] = decision.to_dict()
+        result["execution_report"] = report.to_dict()
+        result["config"] = config
+    return result
+
+
+def revise_best_edit(
+    *,
+    render_folder: Path,
+    campaign_id: str,
+    content_piece_id: str | None,
+    template_id: str,
+    parent_render_version_id: str,
+    parent_finish_version_id: str,
+    source_file: Path,
+    revision_note: str,
+    brand_id: str = DEFAULT_BRAND_ID,
+    platform: str = "",
+    content_type: str = "",
+    campaign_goal: str = "",
+    progress: ProgressCb | None = None,
+) -> dict[str, Any]:
+    previous_record = load_finish_record(render_folder, parent_finish_version_id)
+    previous_config = load_finish_config(render_folder, parent_finish_version_id)
+    if previous_record is None or previous_config is None:
+        return {"ok": False, "error": "Parent finished version not found."}
+    config, revision_actions = apply_revision_note_to_config(previous_config, revision_note)
+    if previous_record.edit_decision:
+        decision = EditDecision.from_dict(previous_record.edit_decision)
+    else:
+        decision, _ = build_edit_decision(
+            source_file=source_file,
+            brand_id=brand_id,
+            platform=platform,
+            content_type=content_type or template_id,
+            campaign_goal=campaign_goal,
+            template_id=template_id,
+        )
+    if revision_actions:
+        decision.major_decisions = [*(decision.major_decisions or []), "Revision note applied"][:3]
+        decision.rationale = (decision.rationale + f" Revision note: {revision_note}").strip()
+        decision.color.value = config.color.to_dict()
+        if config.logo.role in {"", "none"} and not config.logo.asset_id:
+            decision.logo_decision.value = "omit"
+            decision.logo_decision.reason = "Natural-language revision requested removing a distracting logo."
+            decision.logo_placement.value = "none"
+            decision.logo_placement.applied = False
+            decision.logo_placement.unsupported_reason = "intentionally_omitted"
+    report = build_execution_report(decision, config, extra_applied=revision_actions)
+    result = create_finish(
+        render_folder=render_folder,
+        campaign_id=campaign_id,
+        content_piece_id=content_piece_id,
+        template_id=template_id,
+        parent_render_version_id=parent_render_version_id,
+        parent_finish_version_id=parent_finish_version_id,
+        source_file=source_file,
+        config=config,
+        brand_id=brand_id,
+        progress=progress,
+        edit_decision=decision.to_dict(),
+        execution_report=report.to_dict(),
+        revision_note=revision_note,
+        creative_review_score=decision.creative_review_score,
+        auto_ack_warnings=True,
+    )
+    if result.get("ok"):
+        result["edit_decision"] = decision.to_dict()
+        result["execution_report"] = report.to_dict()
+        result["config"] = config
+    return result
+
+
+def set_finish_approval(
+    *,
+    render_folder: Path,
+    finish_version_id: str,
+    approval_status: str,
+    brand_id: str = DEFAULT_BRAND_ID,
+    revision_note: str | None = None,
+) -> dict[str, Any]:
+    if approval_status not in {"approved", "needs_revision", "rejected"}:
+        return {"ok": False, "error": f"Unsupported approval status: {approval_status}"}
+    try:
+        record = update_finish_status(
+            render_folder,
+            finish_version_id,
+            approval_status=approval_status,
+            revision_note=revision_note,
+        )
+    except KeyError:
+        return {"ok": False, "error": "Finished version not found."}
+    event = new_approval_event(
+        brand_id=brand_id,
+        campaign_id=record.campaign_id,
+        content_piece_id=record.content_piece_id,
+        finish_version_id=record.finish_version_id,
+        parent_finish_version_id=record.parent_finish_version_id,
+        approval_status=approval_status,
+        revision_note=revision_note,
+        edit_decision=record.edit_decision,
+        creative_review_score=record.creative_review_score,
+    )
+    record_approval_event(event)
+    return {"ok": True, "record": record, "approval_event": event}
 
 
 def send_to_review(render_folder: Path, finish_version_id: str) -> dict[str, Any]:
