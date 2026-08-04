@@ -1,8 +1,8 @@
-"""BettyOS — campaign → create → studio → review → revise → approve → export.
+"""BettyOS — guided creative operating system.
 
 This module is only the shell: theme, sidebar, the active campaign, and routing.
-Every screen lives in `ui/screens/`, and every action goes through
-`ui/workflow_service.py` so the command line tools and this interface stay in step.
+Pipeline stages live inside the campaign workspace. Every action still goes
+through `ui/workflow_service.py` so the command line tools stay in step.
 """
 
 from __future__ import annotations
@@ -12,19 +12,19 @@ import streamlit as st
 from ui import nav
 from ui.campaign_state import build_campaign_state
 from ui.components import inject_theme, quiet
-from ui.screens import approvals, campaigns, create, export, home, library, review, settings, studio
-from ui.status import campaign_status
+from ui.continue_campaign import resolve_continuation
+from ui.screens import campaigns, insights, library, settings, today, workspace
+from ui.status import Status
 
 
 def _sidebar(state) -> str:
     with st.sidebar:
         st.markdown(
             '<p class="betty-brand">BettyOS</p>'
-            '<p class="betty-brand-note">Content studio</p>',
+            '<p class="betty-brand-note">Creative studio</p>',
             unsafe_allow_html=True,
         )
 
-        # Bound to the same key `goto()` writes, so deep links move the sidebar too.
         choice = st.radio(
             "Go to",
             options=list(nav.NAV_ITEMS),
@@ -34,18 +34,30 @@ def _sidebar(state) -> str:
 
         st.divider()
         if state.exists:
-            status = campaign_status(state.stage)
+            continuation = resolve_continuation(state)
+            tone = {
+                "blocked": "blocked",
+                "ready_to_export": "positive",
+                "complete": "positive",
+                "draft_ready": "attention",
+                "awaiting_approval": "attention",
+                "human_input_required": "attention",
+            }.get(continuation.current_state, "active")
+            badge = Status(
+                continuation.current_state,
+                continuation.founder_stage_label,
+                tone,
+            )
+            # Orientation only — no duplicate Continue / action labels.
             st.markdown(
                 '<p class="betty-brand-note" style="margin-bottom:0.25rem;">Active campaign</p>'
                 f'<p style="margin:0 0 0.35rem;font-weight:600;">{state.name}</p>'
-                f'<span class="betty-badge {status.tone}">{status.label}</span>',
+                f'<span class="betty-badge {badge.tone}">{badge.label}</span>',
                 unsafe_allow_html=True,
             )
             st.progress(state.progress_fraction)
         else:
             quiet("No campaign open.")
-            if st.button("Choose a campaign", use_container_width=True):
-                nav.goto("Campaigns")
 
     return choice
 
@@ -61,28 +73,24 @@ def main() -> None:
     nav.init_state()
 
     state = build_campaign_state(nav.active_campaign_path())
+
+    # Contextual workspace takes over the main pane without a sidebar item.
+    contextual = nav.contextual_page()
+    if contextual == nav.WORKSPACE:
+        _sidebar(state)
+        workspace.render(state)
+        return
+
     page = _sidebar(state)
 
-    if page == "Home":
-        home.render(state)
+    if page == "Today":
+        today.render(state)
     elif page == "Campaigns":
         campaigns.render(state)
-    elif page == "Create":
-        create.render(state)
-    elif page == "Studio":
-        studio.render(state)
-    elif page == "Review":
-        review.render(state)
-    elif page == "Revisions":
-        # Revisions is Review's second step, reachable directly from the sidebar.
-        st.session_state[nav.PENDING_TAB] = "Revisions"
-        review.render(state)
-    elif page == "Approvals":
-        approvals.render(state)
-    elif page == "Export":
-        export.render(state)
     elif page == "Library":
         library.render()
+    elif page == "Insights":
+        insights.render()
     else:
         settings.render()
 

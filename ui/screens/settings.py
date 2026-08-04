@@ -38,15 +38,18 @@ TIER_TONES = {"working": "positive", "partial": "attention", "unavailable": "blo
 
 
 def render() -> None:
-    page_header("Settings", "How this copy of BettyOS is configured, and what it can do.")
+    page_header("Settings", "Application configuration for this copy of BettyOS.")
 
     api_ready = api_key_configured()
     ffmpeg_ready = ffmpeg_available()
 
     _configuration(api_ready, ffmpeg_ready)
     _locations()
-    _capabilities()
-    _advanced(api_ready, ffmpeg_ready)
+    with st.expander("What BettyOS Can Do", expanded=False):
+        quiet("Honest capability status. Technical evidence stays under Diagnostics.")
+        _capabilities()
+    with st.expander("Diagnostics", expanded=False):
+        _advanced(api_ready, ffmpeg_ready)
 
 
 def _configuration(api_ready: bool, ffmpeg_ready: bool) -> None:

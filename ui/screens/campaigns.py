@@ -67,23 +67,12 @@ def _current_campaign(state: CampaignState) -> None:
     with st.container(border=True):
         show_badges([campaign_status(state.stage)])
         st.markdown(f'<div class="betty-section">{state.name}</div>', unsafe_allow_html=True)
-        counts = state.counts
         key_values(
             [
                 ("Goal", state.goal),
-                ("Platforms", ", ".join(state.platforms) or "Not recorded"),
-                ("Content pieces", counts["pieces"]),
-                ("Render versions", counts["renders"]),
-                ("Approved", counts["approved"]),
-                ("Created", state.created_at),
+                ("Stage", campaign_status(state.stage).label),
+                ("Next action", state.next_step.label),
                 ("Last updated", state.updated_at),
-                (
-                    "Progress",
-                    f"{sum(1 for s in state.steps if s.state == 'complete')} of "
-                    f"{len(state.steps)} steps complete",
-                ),
-                ("Current blocker", state.blockers[0] if state.blockers else "None"),
-                ("Next recommended action", state.next_step.label),
             ]
         )
         if st.button(
@@ -91,7 +80,14 @@ def _current_campaign(state: CampaignState) -> None:
             type="primary",
             key="campaigns_continue",
         ):
-            nav.goto(state.next_step.destination, state.next_step.tab)
+            from ui.continue_campaign import resolve_continuation
+
+            continuation = resolve_continuation(state)
+            nav.goto_workspace(
+                continuation.current_stage,
+                piece_id=continuation.focus_piece_id,
+                version_key=continuation.focus_version_key,
+            )
 
 
 def _campaign_row(summary: CampaignSummary) -> None:
@@ -124,7 +120,7 @@ def _campaign_row(summary: CampaignSummary) -> None:
                 use_container_width=True,
             ):
                 nav.set_active_campaign(summary.path)
-                nav.goto("Home")
+                nav.goto_workspace()
             if st.button(
                 "Archive",
                 key=f"archive_{summary.path.name}",
@@ -218,7 +214,7 @@ def _create_campaign() -> None:
         report(folder, success_prefix="Campaign created.")
         if folder.ok and folder.path is not None:
             nav.set_active_campaign(folder.path)
-            nav.goto("Create", "1. Content")
+            nav.goto_workspace("plan")
 
 
 def _archived() -> None:
