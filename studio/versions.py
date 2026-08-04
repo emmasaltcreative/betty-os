@@ -135,6 +135,10 @@ def create_finished_version(
     process_fn,
     source_asset_id: str | None = None,
     source_output_id: str | None = None,
+    edit_decision: dict[str, Any] | None = None,
+    execution_report: dict[str, Any] | None = None,
+    revision_note: str | None = None,
+    creative_review_score: float | None = None,
 ) -> FinishRecord:
     """
     Non-destructive finished version creation.
@@ -239,8 +243,16 @@ def create_finished_version(
             failure_reason=None,
             ffmpeg_command=result.get("ffmpeg_command"),
             technical_notes=dict(result.get("technical_notes") or {}),
+            edit_decision=dict(edit_decision or {}),
+            execution_report=dict(execution_report or {}),
+            revision_note=revision_note,
+            creative_review_score=creative_review_score,
         )
         atomic_write_json(tmp_parent / "finish_metadata.json", record.to_dict())
+        if edit_decision:
+            atomic_write_json(tmp_parent / "edit_decision.json", edit_decision)
+        if execution_report:
+            atomic_write_json(tmp_parent / "execution_report.json", execution_report)
 
         # Atomic move into place
         os_replace_dir(tmp_parent, final_dir)
@@ -327,6 +339,7 @@ def update_finish_status(
     *,
     status: str | None = None,
     approval_status: str | None = None,
+    revision_note: str | None = None,
 ) -> FinishRecord:
     record = load_finish_record(render_folder, finish_version_id)
     if record is None:
@@ -336,6 +349,8 @@ def update_finish_status(
         data["status"] = status
     if approval_status is not None:
         data["approval_status"] = approval_status
+    if revision_note is not None:
+        data["revision_note"] = revision_note
     data["updated_at"] = utc_now_iso()
     meta_path = finish_version_dir(render_folder, finish_version_id) / "finish_metadata.json"
     atomic_write_json(meta_path, data)

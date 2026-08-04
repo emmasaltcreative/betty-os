@@ -35,6 +35,7 @@ STUDIO_CAPABILITIES = [
     "Static Downloads",
     "Video Downloads",
     "Studio Package Download",
+    "Automatic Best Edit",
 ]
 
 
@@ -67,6 +68,10 @@ def _defaults() -> dict[str, dict[str, Any]]:
         "Static Downloads": ("Download finished PNG/JPG/WebP when file validates.", ""),
         "Video Downloads": ("Download finished MP4 when file validates.", ""),
         "Studio Package Download": ("ZIP of output, preview, config, validation, metadata.", ""),
+        "Automatic Best Edit": (
+            "Brand Guide + Production Rules drive one recommended finish automatically.",
+            "Selective AI cleanup requires a configured provider and is reported honestly when unavailable.",
+        ),
     }
     out: dict[str, dict[str, Any]] = {}
     for name in STUDIO_CAPABILITIES:
