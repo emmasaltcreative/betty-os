@@ -40,6 +40,7 @@ from ui.export_service import build_plan, create_export_package, list_existing_p
 STAGE_OPTIONS = [label for _, label in WORKSPACE_STAGES]
 STAGE_KEYS = {label: key for key, label in WORKSPACE_STAGES}
 KEY_TO_LABEL = {key: label for key, label in WORKSPACE_STAGES}
+STAGE_SELECTOR_KEY = "workspace_stage_selector"
 
 
 def render(state: CampaignState) -> None:
@@ -68,15 +69,9 @@ def render(state: CampaignState) -> None:
         if interrupted.get("version_key"):
             st.session_state[nav.FOCUS_VERSION] = interrupted["version_key"]
 
-    default_label = KEY_TO_LABEL.get(continuation.current_stage, "Plan")
-    if st.session_state.get("workspace_stage") not in STAGE_OPTIONS:
-        st.session_state["workspace_stage"] = default_label
-    selected = nav.step_selector("Stage", STAGE_OPTIONS, key="workspace_stage")
-    pending = nav.take_pending_stage(STAGE_OPTIONS)
-    if pending:
-        selected = pending
-        st.session_state["workspace_stage"] = pending
-
+    # Pending stage must be applied before the segmented-control widget is created.
+    # Writing to a widget's key after instantiation raises StreamlitAPIException.
+    selected = prepare_workspace_stage_selector(continuation.current_stage)
     stage_key = STAGE_KEYS.get(selected, continuation.current_stage)
     nav.persist_workspace_context(state.path, stage=stage_key)
 
@@ -95,6 +90,24 @@ def render(state: CampaignState) -> None:
 
     _journal_panel(state)
     _advanced_panel(state, stage_key)
+
+
+def prepare_workspace_stage_selector(current_stage: str) -> str:
+    """Resolve and bind the stage selector before the widget exists.
+
+    Returns the selected stage label (e.g. ``Decide``). Safe to call from tests
+    with a patched ``st.session_state``.
+    """
+    default_label = KEY_TO_LABEL.get(current_stage, "Plan")
+    pending = nav.take_pending_stage(STAGE_OPTIONS)
+    if pending is not None:
+        st.session_state[STAGE_SELECTOR_KEY] = pending
+    elif st.session_state.get(STAGE_SELECTOR_KEY) not in STAGE_OPTIONS:
+        st.session_state[STAGE_SELECTOR_KEY] = default_label
+
+    # Widget instantiation — no further writes to STAGE_SELECTOR_KEY after this.
+    return nav.step_selector("Stage", STAGE_OPTIONS, key=STAGE_SELECTOR_KEY)
+
 
 
 def _header(state: CampaignState, continuation) -> None:

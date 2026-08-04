@@ -288,6 +288,68 @@ class LiveCampaignCompatibilityTests(unittest.TestCase):
             self.assertEqual(data["selected_piece"], "piece_001")
 
 
+class WorkspaceStageSelectorTests(unittest.TestCase):
+    """Regression: pending stage must bind before the stage widget exists."""
+
+    class _GuardedSession(dict):
+        """Mimic Streamlit: refuse writes to a key after its widget is created."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.widget_keys: set[str] = set()
+
+        def __setitem__(self, key, value):  # type: ignore[override]
+            if key in self.widget_keys:
+                raise RuntimeError(
+                    f"st.session_state.{key} cannot be modified after the widget "
+                    f"with key {key} is instantiated."
+                )
+            super().__setitem__(key, value)
+
+        def mark_widget(self, key: str) -> None:
+            self.widget_keys.add(key)
+
+    def test_write_after_widget_instantiation_raises(self) -> None:
+        """Documents the previous error condition on key=workspace_stage."""
+        session = self._GuardedSession()
+        session["workspace_stage"] = "Plan"
+        session.mark_widget("workspace_stage")
+        with self.assertRaises(RuntimeError) as ctx:
+            session["workspace_stage"] = "Decide"
+        self.assertIn("cannot be modified after the widget", str(ctx.exception))
+
+    def test_pending_decide_applied_before_selector_widget(self) -> None:
+        from ui import nav
+        from ui.screens.workspace import (
+            STAGE_KEYS,
+            STAGE_SELECTOR_KEY,
+            prepare_workspace_stage_selector,
+        )
+
+        session = self._GuardedSession()
+        session[nav.PENDING_STAGE] = "decide"
+
+        def fake_step_selector(label, options, *, key):
+            # Widget is now live — further writes to `key` must fail.
+            session.mark_widget(key)
+            return session.get(key)
+
+        with (
+            patch("ui.screens.workspace.st") as workspace_st,
+            patch("ui.nav.st", workspace_st),
+            patch("ui.nav.step_selector", side_effect=fake_step_selector),
+        ):
+            workspace_st.session_state = session
+            selected = prepare_workspace_stage_selector("create")
+
+        self.assertEqual(selected, "Decide")
+        self.assertEqual(session[STAGE_SELECTOR_KEY], "Decide")
+        self.assertEqual(STAGE_KEYS[selected], "decide")
+        self.assertIsNone(session.get(nav.PENDING_STAGE))
+        # No post-widget write attempted — would have raised.
+        self.assertIn(STAGE_SELECTOR_KEY, session.widget_keys)
+
+
 class RecommendationCopyTests(unittest.TestCase):
     def test_draft_why_uses_major_decisions_not_generic(self) -> None:
         from ui.continue_campaign import _draft_why
