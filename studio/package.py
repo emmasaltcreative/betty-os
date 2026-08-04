@@ -54,7 +54,13 @@ def build_studio_package(
             path = folder / rel
             if path.is_file():
                 zf.write(path, arcname=f"previews/{path.name}")
-        for name in ("finish_config.json", "finish_metadata.json", "validation.json"):
+        for name in (
+            "finish_config.json",
+            "finish_metadata.json",
+            "validation.json",
+            "edit_decision.json",
+            "execution_report.json",
+        ):
             path = folder / name
             if path.is_file():
                 zf.write(path, arcname=name)

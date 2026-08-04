@@ -31,9 +31,12 @@ from studio.paths import preview_cache_dir
 from studio.recipes import ensure_default_recipes, get_recipe, list_recipes
 from studio.service import (
     create_finish,
+    generate_best_edit,
     make_studio_package,
+    revise_best_edit,
     run_preview,
     send_to_review,
+    set_finish_approval,
     source_entry_validation,
 )
 from studio.validation import summarize, validate_config
@@ -49,7 +52,7 @@ from studio.versions import (
     save_draft,
 )
 from ui import nav
-from ui.campaign_state import CampaignState, RenderVersion, count_phrase
+from ui.campaign_state import CampaignState, PieceState, RenderVersion, count_phrase
 from ui.components import (
     blocked_state,
     download_file,
@@ -245,7 +248,7 @@ def render(state: CampaignState) -> None:
 
     page_header(
         "Studio",
-        "Finish a render with color recipes, logo placement, and export settings — without changing the original.",
+        "Open a content piece, generate one brand-informed best edit, then approve or request a revision.",
     )
     progress_rail(state.steps)
 
@@ -437,6 +440,17 @@ def _save_current_draft_from_key(state: CampaignState, source_key: str) -> None:
 # --- Header -----------------------------------------------------------------
 
 
+def _piece_for_version(state: CampaignState, version: RenderVersion) -> PieceState | None:
+    if version.piece_id:
+        for piece in state.pieces:
+            if piece.record.piece_id == version.piece_id:
+                return piece
+    for piece in state.pieces:
+        if version in piece.versions:
+            return piece
+    return None
+
+
 def _header(
     state: CampaignState,
     version: RenderVersion,
@@ -447,9 +461,15 @@ def _header(
     active_finish_id: str | None,
 ) -> None:
     finish_label = active_finish_id or "Draft"
+    piece = _piece_for_version(state, version)
+    piece_title = piece.record.title if piece else state.piece_title(version)
+    platform = piece.record.platform if piece else (state.platforms[0] if state.platforms else "")
     with st.container(border=True):
         key_values(
             [
+                ("Content piece", piece_title or version.piece_id or "Unassigned render"),
+                ("Campaign goal", state.goal),
+                ("Platform", platform or "Unspecified"),
                 ("Campaign", state.name),
                 ("Template", version.display_name),
                 ("Parent render", f"version {version.version}"),
@@ -457,7 +477,7 @@ def _header(
                 ("Recipe", _recipe_label(config.recipe_id)),
                 ("Media", media_type.title()),
                 ("Source file", source_path.name),
-                ("Save status", _save_status_badge()),
+                ("Status", "Finished" if active_finish_id else "Ready for automatic best edit"),
             ]
         )
         guardrails = list_guardrails(DEFAULT_BRAND_ID)
@@ -566,40 +586,12 @@ def _controls(
 ) -> None:
     config = _get_config()
 
-    with st.expander("Recipe", expanded=True):
-        config = _section_recipe(config, draft_id)
-
-    with st.expander("Logo", expanded=False):
-        config = _section_logo(config, draft_id, media_type, meta)
-
-    with st.expander("Light", expanded=False):
-        config = _section_lighting(config, draft_id)
-
-    with st.expander("Color", expanded=False):
-        config = _section_color(config, draft_id)
-
-    with st.expander("Texture", expanded=False):
-        config = _section_texture(config, draft_id, media_type)
-
-    with st.expander("Crop / Geometry", expanded=False):
-        config = _section_geometry(config, draft_id)
-
-    with st.expander("LUT", expanded=False):
-        config = _section_lut(config, draft_id)
-
-    if media_type == "video":
-        with st.expander("Video", expanded=False):
-            config = _section_video(config, draft_id)
-
-    with st.expander("Export", expanded=False):
-        config = _section_export(config, draft_id, media_type)
-
-    _set_config(config, dirty=st.session_state.get(DIRTY_KEY, False))
-    _actions(
+    _automatic_controls(
         state,
         version,
         source_path,
         render_folder,
+        config,
         draft_id,
         media_type,
         meta,
@@ -608,6 +600,247 @@ def _controls(
         campaign_id,
         parent_render_id,
     )
+
+    with st.expander("Advanced — normally managed automatically by BettyOS", expanded=False):
+        st.markdown("**Recipe**")
+        config = _section_recipe(config, draft_id)
+        st.markdown("**Logo**")
+        config = _section_logo(config, draft_id, media_type, meta)
+        st.markdown("**Light**")
+        config = _section_lighting(config, draft_id)
+        st.markdown("**Color**")
+        config = _section_color(config, draft_id)
+        st.markdown("**Texture**")
+        config = _section_texture(config, draft_id, media_type)
+        st.markdown("**Crop / Geometry**")
+        config = _section_geometry(config, draft_id)
+        st.markdown("**LUT**")
+        config = _section_lut(config, draft_id)
+        if media_type == "video":
+            st.markdown("**Video**")
+            config = _section_video(config, draft_id)
+        st.markdown("**Export**")
+        config = _section_export(config, draft_id, media_type)
+        st.divider()
+        _set_config(config, dirty=st.session_state.get(DIRTY_KEY, False))
+        _actions(
+            state,
+            version,
+            source_path,
+            render_folder,
+            draft_id,
+            media_type,
+            meta,
+            finish_records,
+            active_finish_id,
+            campaign_id,
+            parent_render_id,
+        )
+
+
+def _automatic_controls(
+    state: CampaignState,
+    version: RenderVersion,
+    source_path: Path,
+    render_folder: Path,
+    config: FinishConfiguration,
+    draft_id: str,
+    media_type: str,
+    meta: dict[str, Any],
+    finish_records: list[FinishRecord],
+    active_finish_id: str | None,
+    campaign_id: str,
+    parent_render_id: str,
+) -> None:
+    section("Automatic Best Edit")
+    piece = _piece_for_version(state, version)
+    platform = piece.record.platform if piece else (state.platforms[0] if state.platforms else "instagram_reel")
+    content_type = piece.record.format if piece else version.template_id
+    overlay_copy = piece.record.body_markdown if piece else version.caption
+    cta_copy = ""
+    record = next((r for r in finish_records if r.finish_version_id == active_finish_id), None)
+
+    if st.button("Generate Best Edit", type="primary", use_container_width=True, key=f"{draft_id}_best_edit"):
+        progress_box = st.empty()
+        messages: list[str] = []
+
+        def progress(msg: str) -> None:
+            messages.append(msg)
+            progress_box.caption(" · ".join(messages[-3:]))
+
+        with st.status("Generating BettyOS best edit…", expanded=True) as status:
+            result = generate_best_edit(
+                render_folder=render_folder,
+                campaign_id=campaign_id,
+                content_piece_id=version.piece_id,
+                template_id=version.template_id,
+                parent_render_version_id=parent_render_id,
+                parent_finish_version_id=active_finish_id,
+                source_file=source_path,
+                brand_id=DEFAULT_BRAND_ID,
+                platform=platform,
+                content_type=content_type,
+                campaign_goal=state.goal,
+                overlay_copy=overlay_copy,
+                cta_copy=cta_copy,
+                progress=progress,
+            )
+            if result.get("ok"):
+                new_record = result["record"]
+                st.session_state[ACTIVE_FINISH_KEY] = new_record.finish_version_id
+                st.session_state.pop(NEEDS_ACK_KEY, None)
+                discard_draft(render_folder, draft_id)
+                _set_config(result.get("config") or config, dirty=False)
+                status.update(label=f"{new_record.finish_version_id} generated.", state="complete")
+                st.rerun()
+            else:
+                status.update(label=str(result.get("error") or "Generation failed."), state="error")
+                blocked_state("Could not generate best edit", str(result.get("error") or ""))
+                validation = result.get("validation")
+                if validation:
+                    _validation_items(validation)
+
+    if record is None:
+        quiet("BettyOS will select one recipe, logo decision, crop/export preset, and honest unsupported actions.")
+        return
+
+    _automatic_finish_summary(render_folder, record, source_path, media_type, draft_id)
+
+    revision_key = f"{draft_id}_revision_note"
+    revision_note = st.text_area(
+        "Needs Revision feedback",
+        value=st.session_state.get(revision_key, ""),
+        placeholder="Example: too warm; logo is distracting",
+        key=revision_key,
+    )
+    col_a, col_b, col_c = st.columns(3)
+    if col_a.button("Approve", type="primary", use_container_width=True, key=f"{draft_id}_approve"):
+        result = set_finish_approval(
+            render_folder=render_folder,
+            finish_version_id=record.finish_version_id,
+            approval_status="approved",
+            brand_id=DEFAULT_BRAND_ID,
+        )
+        if result.get("ok"):
+            st.success("Finish approved.")
+            st.rerun()
+        else:
+            blocked_state("Approval failed", str(result.get("error") or ""))
+    if col_b.button("Needs Revision", use_container_width=True, key=f"{draft_id}_needs_revision"):
+        result = set_finish_approval(
+            render_folder=render_folder,
+            finish_version_id=record.finish_version_id,
+            approval_status="needs_revision",
+            brand_id=DEFAULT_BRAND_ID,
+            revision_note=revision_note,
+        )
+        if result.get("ok"):
+            st.info("Revision note saved.")
+        else:
+            blocked_state("Revision status failed", str(result.get("error") or ""))
+    if col_c.button("Reject", use_container_width=True, key=f"{draft_id}_reject"):
+        result = set_finish_approval(
+            render_folder=render_folder,
+            finish_version_id=record.finish_version_id,
+            approval_status="rejected",
+            brand_id=DEFAULT_BRAND_ID,
+            revision_note=revision_note,
+        )
+        if result.get("ok"):
+            st.warning("Finish rejected.")
+            st.rerun()
+        else:
+            blocked_state("Reject failed", str(result.get("error") or ""))
+
+    if st.button(
+        "Generate Revision From Feedback",
+        use_container_width=True,
+        key=f"{draft_id}_generate_revision",
+        disabled=not revision_note.strip(),
+    ):
+        with st.status("Generating revised best edit…", expanded=True) as status:
+            result = revise_best_edit(
+                render_folder=render_folder,
+                campaign_id=campaign_id,
+                content_piece_id=version.piece_id,
+                template_id=version.template_id,
+                parent_render_version_id=parent_render_id,
+                parent_finish_version_id=record.finish_version_id,
+                source_file=source_path,
+                revision_note=revision_note,
+                brand_id=DEFAULT_BRAND_ID,
+                platform=platform,
+                content_type=content_type,
+                campaign_goal=state.goal,
+            )
+            if result.get("ok"):
+                revised = result["record"]
+                st.session_state[ACTIVE_FINISH_KEY] = revised.finish_version_id
+                status.update(label=f"{revised.finish_version_id} generated.", state="complete")
+                st.rerun()
+            else:
+                status.update(label=str(result.get("error") or "Revision failed."), state="error")
+                blocked_state("Could not revise best edit", str(result.get("error") or ""))
+
+
+def _automatic_finish_summary(
+    render_folder: Path,
+    record: FinishRecord,
+    source_path: Path,
+    media_type: str,
+    draft_id: str,
+) -> None:
+    decision = record.edit_decision or {}
+    report = record.execution_report or {}
+    score = record.creative_review_score
+    with st.container(border=True):
+        key_values(
+            [
+                ("Finish", record.finish_version_id),
+                ("Creative score", f"{score:.2f}" if isinstance(score, (int, float)) else "—"),
+                ("Approval", record.approval_status.replace("_", " ")),
+                ("Recipe", _recipe_label(record.recipe_id)),
+            ]
+        )
+        majors = decision.get("major_decisions") or []
+        if majors:
+            quiet("Key decisions")
+            for item in majors[:3]:
+                st.write(f"- {item}")
+
+        output = resolve_finish_output(render_folder, record)
+        if output:
+            cols = st.columns(2)
+            with cols[0]:
+                quiet("Before")
+                _show_media(source_path, media_type, use_container_width=True)
+            with cols[1]:
+                quiet("After")
+                _show_media(output, record.media_type, use_container_width=True)
+
+        applied = report.get("applied_actions") or []
+        not_applied = report.get("not_applied_actions") or []
+        cols = st.columns(2)
+        with cols[0]:
+            quiet("Applied")
+            for action in applied[:8]:
+                st.write(f"- {action.get('action')}: {action.get('reason') or action.get('value')}")
+        with cols[1]:
+            quiet("Not Applied")
+            if not not_applied:
+                quiet("No unsupported actions.")
+            for action in not_applied[:8]:
+                reason = action.get("unsupported_reason") or action.get("reason")
+                st.write(f"- {action.get('action')}: {reason}")
+
+        output = output_is_downloadable(render_folder, record)
+        if output:
+            download_file(
+                output,
+                label="Download finished file",
+                key=f"{draft_id}_auto_dl_{record.finish_version_id}",
+                mime=mime_for(output),
+            )
 
 
 def _section_recipe(config: FinishConfiguration, draft_id: str) -> FinishConfiguration:
