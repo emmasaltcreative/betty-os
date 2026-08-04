@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-from studio.brand_assets import get_asset, resolve_asset_path
+from studio.brand_assets import get_asset, is_suitable_transparent_mark, resolve_asset_path
 from studio.luts import apply_cube_to_rgb, get_lut, load_cube_for_record
 from studio.models import (
     ASPECT_PRESETS,
@@ -32,6 +32,7 @@ from studio.models import (
     FinishConfiguration,
     LogoConfiguration,
 )
+from studio.overlay_diagnostics import OverlayEvent, record_overlay
 
 SIZE_MODE_PERCENT = {
     "subtle": 12.0,
@@ -373,6 +374,14 @@ def logo_box(
 def apply_logo(img: Image.Image, cfg: FinishConfiguration, *, brand_id: str) -> Image.Image:
     logo_cfg = cfg.logo
     if logo_cfg.role in {"", "none"} and not logo_cfg.asset_id:
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.image_pipeline.apply_logo",
+                kind="skipped_logo",
+                reason="Logo omitted by configuration (role=none).",
+                applied=False,
+            )
+        )
         return img
     asset = None
     if logo_cfg.asset_id:
@@ -382,8 +391,35 @@ def apply_logo(img: Image.Image, cfg: FinishConfiguration, *, brand_id: str) -> 
 
         asset = default_asset_for_role(logo_cfg.role, brand_id)
     if asset is None:
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.image_pipeline.apply_logo",
+                kind="skipped_logo",
+                reason="Logo asset could not be resolved.",
+                applied=False,
+            )
+        )
         return img
-    logo = rasterize_logo(resolve_asset_path(asset))
+
+    asset_path = resolve_asset_path(asset)
+    if not is_suitable_transparent_mark(asset):
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.image_pipeline.apply_logo",
+                kind="skipped_logo",
+                asset_path=str(asset_path),
+                asset_id=asset.asset_id,
+                reason=(
+                    "Blocked solid-color rectangular badge / unsuitable mark from "
+                    "being composited into finished pixels."
+                ),
+                applied=False,
+                extra={"role": asset.role, "requested_role": logo_cfg.role},
+            )
+        )
+        return img
+
+    logo = rasterize_logo(asset_path)
 
     # Color behavior
     if logo_cfg.color_behavior == "mono_light":
@@ -396,6 +432,18 @@ def apply_logo(img: Image.Image, cfg: FinishConfiguration, *, brand_id: str) -> 
 
         alt = default_asset_for_role(logo_cfg.color_behavior, brand_id)
         if alt is not None:
+            if not is_suitable_transparent_mark(alt):
+                record_overlay(
+                    OverlayEvent(
+                        source_function="studio.image_pipeline.apply_logo",
+                        kind="skipped_logo",
+                        asset_path=str(resolve_asset_path(alt)),
+                        asset_id=alt.asset_id,
+                        reason="Alternate light/dark logo variant is not a suitable transparent mark.",
+                        applied=False,
+                    )
+                )
+                return img
             logo = rasterize_logo(resolve_asset_path(alt))
 
     percent = SIZE_MODE_PERCENT.get(logo_cfg.size_mode, logo_cfg.size_percent)
@@ -424,6 +472,20 @@ def apply_logo(img: Image.Image, cfg: FinishConfiguration, *, brand_id: str) -> 
     x, y = logo_box(img.size, logo.size, logo_cfg, safe_margin_px=margin)
     base = img.convert("RGBA")
     base.alpha_composite(logo, dest=(x, y))
+    record_overlay(
+        OverlayEvent(
+            source_function="studio.image_pipeline.apply_logo",
+            kind="logo",
+            asset_path=str(asset_path),
+            asset_id=asset.asset_id,
+            position=(x, y),
+            dimensions=logo.size,
+            opacity=float(logo_cfg.opacity),
+            reason="Composited suitable transparent mark.",
+            applied=True,
+            extra={"placement": logo_cfg.placement, "safe_margin_px": margin},
+        )
+    )
     if img.mode != "RGBA":
         return base.convert(img.mode)
     return base
@@ -450,6 +512,9 @@ def process_static_image(
     preview_max_edge: int = 1280,
 ) -> dict[str, Any]:
     """Full-resolution process. Preview proxy is separate and never saved as final."""
+    from studio.overlay_diagnostics import reset_overlay_diagnostics, write_overlay_diagnostics
+
+    reset_overlay_diagnostics()
     img = load_source_image(source)
     img = apply_geometry(img, config)
 
@@ -508,6 +573,9 @@ def process_static_image(
             proxy.convert("RGB").save(preview_path, format="JPEG", quality=85)
         preview_files.append(preview_path)
 
+    # Finish work dir is parent of outputs/ (moved atomically into finish_vNNN).
+    diagnostics_path = write_overlay_diagnostics(output_path.parent.parent)
+
     return {
         "ok": True,
         "output_files": [output_path],
@@ -526,6 +594,7 @@ def process_static_image(
                 "encode",
             ],
             "preview_max_edge": preview_max_edge,
+            "overlay_diagnostics": str(diagnostics_path) if diagnostics_path else None,
         },
     }
 

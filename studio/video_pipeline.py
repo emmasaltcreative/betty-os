@@ -8,10 +8,16 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from studio.brand_assets import default_asset_for_role, get_asset, resolve_asset_path
+from studio.brand_assets import (
+    default_asset_for_role,
+    get_asset,
+    is_suitable_transparent_mark,
+    resolve_asset_path,
+)
 from studio.image_pipeline import SIZE_MODE_PERCENT, logo_box, rasterize_logo
 from studio.luts import get_lut, resolve_lut_path
 from studio.models import FinishConfiguration, PLATFORM_EXPORT_PRESETS
+from studio.overlay_diagnostics import OverlayEvent, record_overlay
 
 
 def ffmpeg_bin() -> str | None:
@@ -240,6 +246,14 @@ def prepare_logo_overlay(
 ) -> tuple[Path | None, tuple[int, int] | None]:
     logo_cfg = cfg.logo
     if logo_cfg.role in {"", "none"} and not logo_cfg.asset_id:
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.video_pipeline.prepare_logo_overlay",
+                kind="skipped_logo",
+                reason="Logo omitted by configuration (role=none).",
+                applied=False,
+            )
+        )
         return None, None
     asset = None
     if logo_cfg.asset_id:
@@ -247,8 +261,35 @@ def prepare_logo_overlay(
     elif logo_cfg.role not in {"", "none"}:
         asset = default_asset_for_role(logo_cfg.role, brand_id)
     if asset is None:
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.video_pipeline.prepare_logo_overlay",
+                kind="skipped_logo",
+                reason="Logo asset could not be resolved.",
+                applied=False,
+            )
+        )
         return None, None
-    logo = rasterize_logo(resolve_asset_path(asset))
+
+    asset_path = resolve_asset_path(asset)
+    if not is_suitable_transparent_mark(asset):
+        record_overlay(
+            OverlayEvent(
+                source_function="studio.video_pipeline.prepare_logo_overlay",
+                kind="skipped_logo",
+                asset_path=str(asset_path),
+                asset_id=asset.asset_id,
+                reason=(
+                    "Blocked solid-color rectangular badge / unsuitable mark from "
+                    "being written as a video overlay."
+                ),
+                applied=False,
+                extra={"role": asset.role},
+            )
+        )
+        return None, None
+
+    logo = rasterize_logo(asset_path)
     percent = SIZE_MODE_PERCENT.get(logo_cfg.size_mode, logo_cfg.size_percent)
     if logo_cfg.size_mode == "custom":
         percent = logo_cfg.size_percent
@@ -268,6 +309,20 @@ def prepare_logo_overlay(
     x, y = logo_box((canvas_w, canvas_h), logo.size, logo_cfg, safe_margin_px=margin)
     out = work_dir / "logo_overlay.png"
     logo.save(out, format="PNG")
+    record_overlay(
+        OverlayEvent(
+            source_function="studio.video_pipeline.prepare_logo_overlay",
+            kind="logo",
+            asset_path=str(asset_path),
+            asset_id=asset.asset_id,
+            position=(x, y),
+            dimensions=logo.size,
+            opacity=float(logo_cfg.opacity),
+            reason="Prepared suitable transparent mark for FFmpeg overlay.",
+            applied=True,
+            extra={"overlay_file": str(out), "safe_margin_px": margin},
+        )
+    )
     return out, (x, y)
 
 
@@ -280,9 +335,12 @@ def process_video(
     preview_path: Path | None = None,
     work_dir: Path,
 ) -> dict[str, Any]:
+    from studio.overlay_diagnostics import reset_overlay_diagnostics, write_overlay_diagnostics
+
     if not ffmpeg_available():
         return {"ok": False, "error": "FFmpeg or ffprobe is not available on this machine."}
 
+    reset_overlay_diagnostics()
     try:
         meta = probe_video(source)
     except RuntimeError as exc:
@@ -388,6 +446,8 @@ def process_video(
         if pproc.returncode == 0 and preview_path.is_file():
             preview_files.append(preview_path)
 
+    diagnostics_path = write_overlay_diagnostics(work_dir)
+
     return {
         "ok": True,
         "output_files": [output_path],
@@ -409,5 +469,6 @@ def process_video(
             "output_meta": out_meta,
             "stderr_tail": (proc.stderr or "")[-1500:],
             "lut3d_supported": ffmpeg_supports_lut3d(),
+            "overlay_diagnostics": str(diagnostics_path) if diagnostics_path else None,
         },
     }

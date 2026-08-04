@@ -80,6 +80,122 @@ METADATA_TEMPLATES = {"pinterest_caption_metadata"}
 COPY_ONLY_TEMPLATES = {"instagram_caption", "email_sequence", "product_copy"}
 CAROUSEL_TEMPLATES = {"editorial_carousel", "product_detail_carousel"}
 
+VAGUE_INCOMPLETE_COPY = (
+    "This asset is approved visually, but its publishing copy is incomplete."
+)
+
+
+def blocking_incomplete_copy_message(piece_title: str, missing_fields: list[str]) -> str:
+    title = (piece_title or "This deliverable").strip()
+    if missing_fields:
+        fields = ", ".join(missing_fields)
+        return (
+            f"{title} is approved visually, but required publishing copy is incomplete "
+            f"({fields})."
+        )
+    return f"{title} is approved visually, but required publishing copy is incomplete."
+
+
+def _count_words(n: int) -> str:
+    words = {
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        7: "seven",
+        8: "eight",
+        9: "nine",
+        10: "ten",
+    }
+    return words.get(n, str(n))
+
+
+def excluded_incomplete_info_message(exclusions: list[ExportExclusion]) -> str | None:
+    """Non-blocking note for incomplete records already kept out of the package."""
+    actionable = [
+        e for e in exclusions if e.category == "incomplete" and e.actionable
+    ]
+    if not actionable:
+        actionable = [
+            e
+            for e in exclusions
+            if e.category == "incomplete" and "blank" in e.reason.lower()
+        ]
+    if not actionable:
+        return None
+    n = len(actionable)
+    pin_meta = [
+        e
+        for e in actionable
+        if (e.template_id in METADATA_TEMPLATES)
+        or "pinterest" in e.label.lower()
+        or "description" in e.reason.lower()
+    ]
+    word = "record" if n == 1 else "records"
+    verb = "was" if n == 1 else "were"
+    if len(pin_meta) == n:
+        if any("blank" in e.reason.lower() for e in pin_meta):
+            return (
+                f"{_count_words(n).capitalize()} unfinished Pinterest metadata {word} "
+                f"{verb} excluded because their descriptions are blank. "
+                f"They do not block this package."
+            )
+        return (
+            f"{_count_words(n).capitalize()} unfinished Pinterest metadata {word} "
+            f"{verb} excluded. They do not block this package."
+        )
+    return (
+        f"{_count_words(n).capitalize()} incomplete {word} {verb} excluded and "
+        f"do not block this package."
+    )
+
+
+ORPHANED_VISUAL_REASON = "No matching final visual asset."
+
+
+def excluded_orphaned_info_message(exclusions: list[ExportExclusion]) -> str | None:
+    orphaned = [e for e in exclusions if e.category == "orphaned"]
+    if not orphaned:
+        return None
+    n = len(orphaned)
+    word = "record" if n == 1 else "records"
+    verb = "was" if n == 1 else "were"
+    return (
+        f"{_count_words(n).capitalize()} Pinterest metadata {word} {verb} excluded "
+        f"({ORPHANED_VISUAL_REASON}). They do not block this package."
+    )
+
+
+def group_exclusions(
+    exclusions: list[ExportExclusion],
+) -> dict[str, list[ExportExclusion]]:
+    """Group exclusions for Review Exclusions. Actionable incomplete first."""
+    order = (
+        "incomplete",
+        "orphaned",
+        "rejected",
+        "duplicate",
+        "superseded",
+        "other",
+        "excluded",
+    )
+    grouped: dict[str, list[ExportExclusion]] = {key: [] for key in order}
+    for exclusion in exclusions:
+        key = exclusion.category if exclusion.category in grouped else "other"
+        grouped[key].append(exclusion)
+    grouped["incomplete"].sort(key=lambda e: (not e.actionable, e.label))
+    return {k: v for k, v in grouped.items() if v}
+
+
+def actionable_incomplete_exclusions(plan: ExportPlan) -> list[ExportExclusion]:
+    return [
+        e
+        for e in plan.excluded
+        if e.category == "incomplete" and (e.actionable or e.missing_fields)
+    ]
+
 
 @dataclass
 class PackageFile:
@@ -124,6 +240,7 @@ class ExportItem:
     summary_kind: str = ""
     slide_count: int = 0
     warnings: list[str] = field(default_factory=list)
+    blocking_copy_issues: list[str] = field(default_factory=list)
     # Legacy fields retained for archive-mode / older UI paths.
     version: RenderVersion | None = None
     finish_files: list[tuple[str, Path]] = field(default_factory=list)
@@ -135,6 +252,11 @@ class ExportExclusion:
     reason: str
     category: str = "excluded"  # superseded | duplicate | incomplete | rejected | other
     content_piece_id: str | None = None
+    actionable: bool = False
+    missing_fields: list[str] = field(default_factory=list)
+    version_key: str | None = None
+    template_id: str | None = None
+    source_path: str | None = None
 
 
 @dataclass
@@ -142,6 +264,10 @@ class PackageSummary:
     included_lines: list[str] = field(default_factory=list)
     excluded_lines: list[str] = field(default_factory=list)
     warning_lines: list[str] = field(default_factory=list)
+    info_lines: list[str] = field(default_factory=list)
+    blocking_copy_lines: list[str] = field(default_factory=list)
+    readiness_headline: str = ""
+    ready_item_count: int = 0
     reel_count: int = 0
     pin_count: int = 0
     carousel_count: int = 0
@@ -151,6 +277,9 @@ class PackageSummary:
     superseded_count: int = 0
     duplicate_count: int = 0
     incomplete_count: int = 0
+    rejected_count: int = 0
+    actionable_incomplete_count: int = 0
+    orphaned_count: int = 0
 
 
 @dataclass
@@ -161,6 +290,7 @@ class ExportPlan:
     duplicates_removed: list[DuplicateRecord] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
+    info_notes: list[str] = field(default_factory=list)
     validation_status: str = "ready"  # ready | ready_with_warnings | blocked
     include_metadata: bool = False
     summary: PackageSummary = field(default_factory=PackageSummary)
@@ -182,6 +312,15 @@ class ExportPlan:
     @property
     def is_blocked(self) -> bool:
         return self.validation_status == "blocked" or bool(self.blockers)
+
+    @property
+    def create_enabled(self) -> bool:
+        """Publishing package can be created without acknowledging non-blocking notes."""
+        if self.is_empty or self.is_blocked:
+            return False
+        if self.validation_status == "ready_with_warnings":
+            return False
+        return True
 
 
 @dataclass
@@ -454,9 +593,7 @@ def _build_finish_item(
         for doc in _caption_docs(_support_docs(version)):
             copy_check = validate_copy_text(_read_text(doc), required=False, label="Caption")
             if not copy_check.ok:
-                warnings.append(
-                    "This asset is approved visually, but its publishing copy is incomplete."
-                )
+                # Optional paired caption — omit without blocking the visual deliverable.
                 continue
             digest = file_sha256(doc)
             archive_name = f"{folder}/caption.txt"
@@ -514,15 +651,8 @@ def _build_finish_item(
     for doc in _caption_docs(_support_docs(version)):
         text = _read_text(doc)
         copy_check = validate_copy_text(text, required=False, label="Caption")
-        if copy_has_blocking_copy(text):
-            warnings.append(
-                "This asset is approved visually, but its publishing copy is incomplete."
-            )
-            continue
-        if not copy_check.ok:
-            warnings.append(
-                "This asset is approved visually, but its publishing copy is incomplete."
-            )
+        if copy_has_blocking_copy(text) or not copy_check.ok:
+            # Optional paired caption — omit without a package-level incomplete warning.
             continue
         c_digest = file_sha256(doc)
         archive_name = f"{root}/{platform}/{base}_caption.txt"
@@ -611,9 +741,6 @@ def _build_render_item(
             text = _read_text(doc)
             copy_check = validate_copy_text(text, required=False, label="Caption")
             if not copy_check.ok or copy_has_blocking_copy(text):
-                warnings.append(
-                    "This asset is approved visually, but its publishing copy is incomplete."
-                )
                 continue
             archive_name = f"{folder}/caption.txt"
             files.append(
@@ -682,9 +809,6 @@ def _build_render_item(
         text = _read_text(doc)
         copy_check = validate_copy_text(text, required=False, label="Caption")
         if not copy_check.ok or copy_has_blocking_copy(text):
-            warnings.append(
-                "This asset is approved visually, but its publishing copy is incomplete."
-            )
             continue
         archive_name = f"{root}/{platform}/{base}_caption.txt"
         files.append(
@@ -748,17 +872,47 @@ def _build_copy_item(
     if version.template_id in METADATA_TEMPLATES or _is_metadata_doc(primary, version.template_id):
         meta_check = validate_pinterest_metadata_text(text)
         if not meta_check.ok:
+            missing: list[str] = []
+            for issue in meta_check.blockers:
+                if issue.code == "blank_title":
+                    missing.append("Pinterest title")
+                elif issue.code == "blank_copy" or (
+                    "description" in issue.message.lower() and "production" not in issue.message.lower()
+                ):
+                    if "Pinterest description" not in missing:
+                        missing.append("Pinterest description")
+                elif issue.code == "production_notes":
+                    if "production notes" not in missing:
+                        missing.append("production notes")
+                elif issue.message and issue.message not in missing:
+                    missing.append(issue.message)
+            if not missing:
+                missing = ["Pinterest description"]
             reason = meta_check.blockers[0].message if meta_check.blockers else "Incomplete metadata"
             return None, [
-                ExportExclusion(label, reason, category="incomplete", content_piece_id=version.piece_id)
+                ExportExclusion(
+                    label,
+                    reason,
+                    category="incomplete",
+                    content_piece_id=version.piece_id,
+                    actionable=True,
+                    missing_fields=missing or ["Pinterest description"],
+                    version_key=version.key,
+                    template_id=version.template_id,
+                    source_path=str(primary),
+                )
             ]
         if not _has_paired_pin(state, version.piece_id, included_pin_pieces):
             return None, [
                 ExportExclusion(
                     label,
-                    "No matching final Pin image or video for this metadata",
-                    category="incomplete",
+                    ORPHANED_VISUAL_REASON,
+                    category="orphaned",
                     content_piece_id=version.piece_id,
+                    actionable=False,
+                    version_key=version.key,
+                    template_id=version.template_id,
+                    source_path=str(primary),
                 )
             ]
         # Keep metadata human-readable; pairing IDs live in manifest.json.
@@ -797,9 +951,20 @@ def _build_copy_item(
     # Genuine copy-only (e.g. Instagram caption)
     copy_check = validate_copy_text(text, required=True, label=version.display_name)
     if not copy_check.ok:
+        missing = [i.message for i in copy_check.blockers]
         reason = copy_check.blockers[0].message if copy_check.blockers else "Incomplete copy"
         return None, [
-            ExportExclusion(label, reason, category="incomplete", content_piece_id=version.piece_id)
+            ExportExclusion(
+                label,
+                reason,
+                category="incomplete",
+                content_piece_id=version.piece_id,
+                actionable=True,
+                missing_fields=missing,
+                version_key=version.key,
+                template_id=version.template_id,
+                source_path=str(primary),
+            )
         ]
     if copy_has_blocking_copy(text):
         return None, [
@@ -808,6 +973,11 @@ def _build_copy_item(
                 "Copy still contains internal production instructions",
                 category="incomplete",
                 content_piece_id=version.piece_id,
+                actionable=True,
+                missing_fields=["Publishing copy (remove production notes)"],
+                version_key=version.key,
+                template_id=version.template_id,
+                source_path=str(primary),
             )
         ]
 
@@ -901,6 +1071,11 @@ def _dedupe_plan(
 
 def _summarize(plan: ExportPlan) -> PackageSummary:
     summary = PackageSummary()
+    summary.ready_item_count = len(plan.included)
+    included_piece_ids = {
+        item.content_piece_id for item in plan.included if item.content_piece_id
+    }
+
     for item in plan.included:
         if item.summary_kind == "reel":
             summary.reel_count += 1
@@ -925,7 +1100,15 @@ def _summarize(plan: ExportPlan) -> PackageSummary:
             summary.included_lines.append(item.label)
         if item.paired_caption and item.summary_kind in {"reel", "pin", "carousel"}:
             summary.caption_count += 1
+        for issue in item.blocking_copy_issues:
+            if issue not in summary.blocking_copy_lines:
+                summary.blocking_copy_lines.append(issue)
+            if issue not in summary.warning_lines:
+                summary.warning_lines.append(issue)
         for warning in item.warnings:
+            # Never promote the vague incomplete-copy line to package readiness.
+            if warning == VAGUE_INCOMPLETE_COPY:
+                continue
             if warning not in summary.warning_lines:
                 summary.warning_lines.append(warning)
 
@@ -948,11 +1131,53 @@ def _summarize(plan: ExportPlan) -> PackageSummary:
             summary.duplicate_count += 1
         elif exclusion.category == "incomplete":
             summary.incomplete_count += 1
+            if exclusion.actionable or exclusion.missing_fields:
+                summary.actionable_incomplete_count += 1
+        elif exclusion.category == "orphaned":
+            summary.orphaned_count += 1
+        elif exclusion.category == "rejected":
+            summary.rejected_count += 1
 
     summary.duplicate_count = max(summary.duplicate_count, len(plan.duplicates_removed))
+
+    # Non-blocking: incomplete exclusions that are not paired with included media.
+    unpaired_incomplete = [
+        e
+        for e in plan.excluded
+        if e.category == "incomplete"
+        and (
+            not e.content_piece_id
+            or e.content_piece_id not in included_piece_ids
+            or e.template_id in METADATA_TEMPLATES
+        )
+    ]
+    # Metadata incompletes for other pieces are always non-blocking relative to the package.
+    info = excluded_incomplete_info_message(
+        [
+            e
+            for e in unpaired_incomplete
+            if e.actionable or "blank" in e.reason.lower()
+        ]
+    )
+    if info:
+        summary.info_lines.append(info)
+    orphan_info = excluded_orphaned_info_message(plan.excluded)
+    if orphan_info:
+        summary.info_lines.append(orphan_info)
+
     for warning in plan.warnings:
+        if warning == VAGUE_INCOMPLETE_COPY:
+            continue
         if warning not in summary.warning_lines:
             summary.warning_lines.append(warning)
+
+    n = summary.ready_item_count
+    if n:
+        summary.readiness_headline = (
+            f"{n} item{'s' if n != 1 else ''} {'are' if n != 1 else 'is'} ready to publish."
+        )
+    else:
+        summary.readiness_headline = "No items are ready to publish."
     return summary
 
 
@@ -1063,9 +1288,27 @@ def build_publishing_plan(state: CampaignState) -> ExportPlan:
 
     # Second pass: copy / metadata
     for key, versions in pending_copy:
-        kind, version, finish, reason = _select_canonical(state, versions)
-        if kind == "none" or version is None:
+        active_versions = [
+            v
+            for v in versions
+            if not (v.folder / ".archived_incomplete_record").is_file()
+        ]
+        if not active_versions:
             sample = versions[0]
+            plan.excluded.append(
+                ExportExclusion(
+                    _piece_label(state, sample),
+                    "Archived incomplete record",
+                    category="orphaned",
+                    content_piece_id=sample.piece_id,
+                    version_key=sample.key,
+                    template_id=sample.template_id,
+                )
+            )
+            continue
+        kind, version, finish, reason = _select_canonical(state, active_versions)
+        if kind == "none" or version is None:
+            sample = active_versions[0]
             plan.excluded.append(
                 ExportExclusion(
                     _piece_label(state, sample),
@@ -1075,7 +1318,7 @@ def build_publishing_plan(state: CampaignState) -> ExportPlan:
                 )
             )
             continue
-        for other in versions:
+        for other in active_versions:
             if other.key == version.key:
                 continue
             if other.approval_status == "approved":
@@ -1098,19 +1341,31 @@ def build_publishing_plan(state: CampaignState) -> ExportPlan:
         plan.included, plan.excluded
     )
     plan.summary = _summarize(plan)
+    plan.info_notes = list(plan.summary.info_lines)
     plan.warnings = list(plan.summary.warning_lines)
 
     if plan.is_empty:
         plan.validation_status = "blocked"
         plan.blockers.append("Package would contain no publishable items.")
-    elif any(
-        "publishing copy is incomplete" in w for item in plan.included for w in item.warnings
-    ):
-        # Incomplete paired copy is a warning with required acknowledgement, not a hard
-        # block of the whole package — unless the only content is incomplete copy-only.
+        # Required incomplete copy that emptied the package — name the condition.
+        actionable = actionable_incomplete_exclusions(plan)
+        if actionable:
+            sample = actionable[0]
+            plan.blockers.append(
+                blocking_incomplete_copy_message(
+                    sample.label,
+                    sample.missing_fields or [sample.reason],
+                )
+            )
+    elif plan.summary.blocking_copy_lines:
         plan.validation_status = "ready_with_warnings"
+        plan.warnings = list(plan.summary.blocking_copy_lines)
     else:
         plan.validation_status = "ready"
+        # Excluded incomplete copy must not force acknowledgement.
+        plan.warnings = [
+            w for w in plan.warnings if w != VAGUE_INCOMPLETE_COPY and w not in plan.info_notes
+        ]
     return plan
 
 
@@ -1276,14 +1531,17 @@ def _readme(state: CampaignState, plan: ExportPlan, created_at: str) -> str:
             lines.append(f"- {exclusion.label} because {exclusion.reason}")
     else:
         lines.append("- Nothing excluded")
-    if plan.warnings or plan.summary.warning_lines:
-        lines.extend(["", "Warnings / manual steps", ""])
+    if plan.warnings or plan.summary.warning_lines or plan.info_notes:
+        lines.extend(["", "Notes", ""])
         for warning in plan.summary.warning_lines or plan.warnings:
             lines.append(f"- {warning}")
+        for info in plan.info_notes or plan.summary.info_lines:
+            if info not in (plan.summary.warning_lines or plan.warnings):
+                lines.append(f"- {info}")
     lines.extend(
         [
             "",
-            "Notes",
+            "Package notes",
             "",
             "- Historical versions remain in BettyOS and are not included in this package.",
             "- Use Archive Package if you need approved version history.",

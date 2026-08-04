@@ -13,7 +13,12 @@ from src.brand import BRAND_BRAIN_FILES, load_brand_brain
 from src.common import DEFAULT_BRAND_ID, PRODUCTION_DIR, ROOT
 from src.persistence import load_json
 from studio.apply_recipe import apply_recipe_to_config
-from studio.brand_assets import default_asset_for_role, list_assets
+from studio.brand_assets import (
+    analyze_mark_pixels,
+    auto_logo_safe_margin_px,
+    resolve_asset_path,
+    select_best_logo_asset,
+)
 from studio.edit_decision import (
     AppliedAction,
     CleanupRecommendation,
@@ -281,37 +286,50 @@ def decide_logo(
     overlay_mentions_brand: bool,
     findings: list[Any],
 ) -> tuple[str, str, str, LogoConfiguration]:
-    """Return (choice, reason, source, logo_config). choice: required|optional|omit."""
+    """Return (choice, reason, source, logo_config). choice: required|optional|omit.
+
+    Never auto-applies a solid-color rectangular badge. Prefer a transparent
+    wordmark / monogram / light / dark mark, or omit entirely — especially for
+    Oh Betty Jaletti lifestyle content.
+    """
     blob = f"{platform} {content_type} {campaign_goal} {piece_objective}".lower()
 
-    # Preference findings can inform but do not override explicit product/email needs
     prefer_omit = any(
         "logo" in (f.finding or "").lower() and "avoid" in (f.finding or "").lower()
         for f in findings
     )
+    lifestyle = _is_lifestyle_content(content_type, platform, piece_objective, campaign_goal)
+    suitable = select_best_logo_asset(brand_id)
 
     if "email" in blob or "product" in content_type:
         choice = "required"
         reason = "Product and email surfaces need a clear brand mark for recognition."
         source = "Brand Guide, platform requirement"
-    elif overlay_mentions_brand or "lifestyle_reel" in content_type or "lifestyle" in content_type:
+    elif lifestyle:
         choice = "omit"
-        reason = (
-            "Lifestyle reel already carries brand presence through atmosphere and copy; "
-            "a persistent logo would compete with visual hierarchy."
-        )
+        if overlay_mentions_brand:
+            reason = (
+                "Brand is already named in the copy; adding a logo would over-brand "
+                "this lifestyle frame."
+            )
+        elif suitable is None:
+            reason = (
+                "No suitable transparent wordmark or monogram is configured; "
+                "omitting rather than placing a badge-like mark."
+            )
+        else:
+            reason = (
+                "Lifestyle content already carries brand presence through atmosphere "
+                "and composition; a corner mark would weaken the frame."
+            )
         source = "Brand Guide, prior approval feedback" if prefer_omit else "Brand Guide"
     elif "pinterest" in blob or "pin" in content_type:
         choice = "optional"
-        reason = "Editorial pins can carry a subtle mark; omit when composition is dense."
+        reason = "Editorial pins can carry a subtle transparent mark when one exists."
         source = "Brand Guide"
-        if prefer_omit:
-            choice = "omit"
-            reason = "Prior approvals favor omitting logos on lifestyle/editorial social."
-            source = "prior approval feedback"
     else:
         choice = "optional"
-        reason = "Optional subtle brand presence when a primary logo asset exists."
+        reason = "Optional subtle brand presence when a suitable transparent logo exists."
         source = "Brand Guide"
 
     if prefer_omit and choice != "required":
@@ -322,29 +340,78 @@ def decide_logo(
         )
         source = "prior approval feedback, Brand Guide"
 
+    # Lifestyle omit gates — even if an earlier branch left optional.
+    if lifestyle and choice != "required":
+        if overlay_mentions_brand or suitable is None or prefer_omit:
+            choice = "omit"
+
     logo = LogoConfiguration(role="none")
     if choice in {"required", "optional"}:
-        asset = default_asset_for_role("primary", brand_id) or (
-            list_assets(brand_id)[0] if list_assets(brand_id) else None
-        )
-        if asset:
-            logo = LogoConfiguration(
-                role=asset.role,
-                asset_id=asset.asset_id,
-                placement="bottom_right",
-                size_mode="subtle",
-                opacity=min(0.8, 0.75),
-                timing_mode="closing" if "reel" in content_type else "full",
+        if suitable is None:
+            # Never fall back to a solid jade rectangle / opaque badge.
+            choice = "omit"
+            reason = (
+                "No suitable transparent logo asset is available. "
+                "Automatic Studio will not place a solid-color rectangular badge."
             )
-        elif choice == "required":
+            source = "asset analysis, Brand Guardian"
+            return choice, reason, source, logo
+
+        analysis = analyze_mark_pixels(resolve_asset_path(suitable))
+        if analysis.get("looks_like_solid_rectangle") or not analysis.get(
+            "suitable_transparent_mark"
+        ):
             choice = "omit"
-            reason = "Logo was preferred but no brand logo asset is configured."
-            source = "asset analysis"
-        else:
-            choice = "omit"
-            reason = "Optional logo omitted — no brand logo asset is configured."
-            source = "asset analysis"
+            reason = analysis.get("reason") or (
+                "Configured logo asset is not a suitable transparent mark."
+            )
+            source = "asset analysis, Brand Guardian"
+            return choice, reason, source, logo
+
+        margin = auto_logo_safe_margin_px()
+        logo = LogoConfiguration(
+            role=suitable.role,
+            asset_id=suitable.asset_id,
+            placement="bottom_right",
+            size_mode="standard",
+            size_percent=18.0,
+            opacity=0.85,
+            safe_margin_mode="pixels",
+            safe_margin_value=margin,
+            timing_mode="closing" if "reel" in content_type else "full",
+        )
+        # Keep required product/email marks readable; optional stays restrained.
+        if choice == "optional":
+            logo.size_mode = "subtle"
+            logo.size_percent = 14.0
+            logo.opacity = 0.75
     return choice, reason, source, logo
+
+
+def _is_lifestyle_content(
+    content_type: str,
+    platform: str,
+    piece_objective: str,
+    campaign_goal: str,
+) -> bool:
+    blob = f"{content_type} {platform} {piece_objective} {campaign_goal}".lower()
+    if "product" in blob or "email" in blob or "flatlay" in blob:
+        return False
+    return any(
+        token in blob
+        for token in (
+            "lifestyle",
+            "reel",
+            "editorial",
+            "pin",
+            "instagram",
+            "atmosphere",
+            "reading",
+            "ritual",
+            "tiktok",
+            "story",
+        )
+    )
 
 
 def _map_static_to_video(config: FinishConfiguration) -> VideoAdjustments:

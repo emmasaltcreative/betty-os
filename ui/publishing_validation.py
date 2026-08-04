@@ -281,6 +281,20 @@ def validate_copy_text(text: str, *, required: bool = True, label: str = "Copy")
                 f"{label} still contains internal production instructions",
             )
         )
+
+    from services.em_dash import contains_em_dash, evaluate_em_dashes
+
+    if contains_em_dash(stripped):
+        report = evaluate_em_dashes(stripped)
+        if report.rewritten_count or report.needs_attention:
+            issues.append(
+                ValidationIssue(
+                    "em_dash",
+                    f"{label} uses an unnecessary em dash; prefer simpler punctuation",
+                    blocking=False,
+                )
+            )
+
     return ValidationResult(ok=not any(i.blocking for i in issues), issues=issues)
 
 

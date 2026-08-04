@@ -36,3 +36,4 @@ Tone targets that stay on-brand:
 - Use corporate, influencer, or AI-sounding cadence (stacked clichés, hollow adjectives, fake intimacy)
 - Invent personal labor, heritage craft claims, or stock urgency
 - Over-explain the brand; trust the ritual
+- Use em dashes by default. Prefer periods, commas, colons, parentheses, or separate sentences. Avoid em dashes as decorative or habitual punctuation. Do not use multiple em dashes in one short piece of copy. An em dash may be used only when it materially improves hook visibility, reading rhythm, emotional emphasis, scanability in short-form creative, or conversion clarity, and the writer can explain that benefit for the specific line.

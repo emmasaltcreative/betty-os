@@ -620,6 +620,32 @@ def finish_records_for_version(version: RenderVersion) -> list["FinishRecord"]: 
     ]
 
 
+def _finish_sort_key(record: "FinishRecord") -> tuple[int, str]:  # noqa: F821
+    """Newest finish_vNNN first by version number, then updated_at."""
+    mid = record.finish_version_id or ""
+    num = 0
+    if mid.startswith("finish_v"):
+        try:
+            num = int(mid.removeprefix("finish_v"))
+        except ValueError:
+            num = 0
+    return (num, record.updated_at or "")
+
+
+def active_finish_for_decide(version: RenderVersion) -> "FinishRecord | None":  # noqa: F821
+    """Finish Decide should show: newest ready_for_review, else newest finish.
+
+    Older ready_for_review finishes (e.g. jade-badge v001) must not win over a
+    newer omit finish that was also sent to review.
+    """
+    finishes = finish_records_for_version(version)
+    if not finishes:
+        return None
+    ready = [f for f in finishes if f.status == "ready_for_review"]
+    pool = ready if ready else finishes
+    return max(pool, key=_finish_sort_key)
+
+
 def finished_versions_sent_to_review(
     versions: list[RenderVersion],
 ) -> list[tuple[RenderVersion, "FinishRecord"]]:  # noqa: F821

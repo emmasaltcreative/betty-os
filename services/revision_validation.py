@@ -126,6 +126,7 @@ class Verdict:
     option_id: str
     verdict: str
     issues: list[Issue] = field(default_factory=list)
+    rewritten_text: str | None = None
 
     @property
     def label(self) -> str:
@@ -136,12 +137,15 @@ class Verdict:
         return self.verdict != REJECTED
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "option_id": self.option_id,
             "verdict": self.verdict,
             "label": self.label,
             "issues": [issue.to_dict() for issue in self.issues],
         }
+        if self.rewritten_text is not None:
+            payload["rewritten_text"] = self.rewritten_text
+        return payload
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Verdict":
@@ -157,6 +161,7 @@ class Verdict:
                 for raw in data.get("issues") or []
                 if isinstance(raw, dict)
             ],
+            rewritten_text=data.get("rewritten_text"),
         )
 
 
@@ -186,8 +191,13 @@ def validate_option(
     max_chars: int | None = None,
     platform: str = "",
     brand_guide: str = "",
+    rationale: str = "",
+    preserve_em_dashes: bool = False,
+    auto_rewrite_em_dashes: bool = True,
 ) -> Verdict:
     """Check one option. Hard failures reject it; soft ones ask for a look."""
+    from services.em_dash import evaluate_em_dashes
+
     issues: list[Issue] = []
     cleaned = text.strip()
     lower = cleaned.lower()
@@ -195,6 +205,35 @@ def validate_option(
     if not cleaned:
         issues.append(Issue("empty", "This option has no text.", REJECTED))
         return Verdict(option_id, REJECTED, issues)
+
+    em_report = evaluate_em_dashes(
+        cleaned,
+        rationale=rationale,
+        preserve=preserve_em_dashes,
+    )
+    if em_report.needs_attention and em_report.rewritten_count:
+        issues.append(
+            Issue(
+                "em_dash",
+                em_report.messages[0]
+                if em_report.messages
+                else "Unnecessary em dash needs simpler punctuation.",
+                NEEDS_ATTENTION,
+            )
+        )
+        if auto_rewrite_em_dashes and not preserve_em_dashes:
+            cleaned = em_report.rewritten
+            lower = cleaned.lower()
+    elif em_report.needs_attention and preserve_em_dashes:
+        issues.append(
+            Issue(
+                "em_dash",
+                em_report.messages[0]
+                if em_report.messages
+                else "Em dash present in approved historical copy; left unchanged.",
+                NEEDS_ATTENTION,
+            )
+        )
 
     for phrase in BRAND_PROHIBITED:
         if phrase in lower:
@@ -299,9 +338,19 @@ def validate_option(
         issues.extend(_brand_guide_issues(cleaned, brand_guide))
 
     if any(issue.severity == REJECTED for issue in issues):
-        return Verdict(option_id, REJECTED, issues)
+        return Verdict(
+            option_id,
+            REJECTED,
+            issues,
+            rewritten_text=em_report.rewritten if em_report.rewritten_count else None,
+        )
     if issues:
-        return Verdict(option_id, NEEDS_ATTENTION, issues)
+        return Verdict(
+            option_id,
+            NEEDS_ATTENTION,
+            issues,
+            rewritten_text=em_report.rewritten if em_report.rewritten_count else None,
+        )
     return Verdict(option_id, PASS, issues)
 
 
@@ -362,7 +411,7 @@ def validate_options(
     for index, option in enumerate(options):
         option_id = str(option.get("option_id") or f"option_{index + 1:03d}")
         others = [text for position, text in enumerate(texts) if position != index]
-        verdicts[option_id] = validate_option(
+        verdict = validate_option(
             str(option.get("text") or ""),
             option_id=option_id,
             original_value=original_value,
@@ -371,7 +420,12 @@ def validate_options(
             max_chars=max_chars,
             platform=platform,
             brand_guide=brand_guide,
+            rationale=str(option.get("rationale") or ""),
         )
+        if verdict.rewritten_text:
+            option["text"] = verdict.rewritten_text
+            texts[index] = verdict.rewritten_text
+        verdicts[option_id] = verdict
     return verdicts
 
 

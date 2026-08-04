@@ -139,8 +139,13 @@ class StudioImageTests(unittest.TestCase):
     def test_static_process_and_immutable_finish(self) -> None:
         src = self.tmp / "editorial.png"
         Image.new("RGB", (600, 900), (230, 220, 210)).save(src)
+        # Transparent letterform-style mark — not a solid rectangular badge.
         logo = self.tmp / "mark.png"
-        Image.new("RGBA", (80, 30), (20, 80, 60, 180)).save(logo)
+        mark = Image.new("RGBA", (160, 48), (0, 0, 0, 0))
+        from PIL import ImageDraw
+
+        ImageDraw.Draw(mark).text((8, 12), "OBJ", fill=(20, 80, 60, 230))
+        mark.save(logo)
         asset = upload_brand_asset(
             logo, brand_id=self.brand, display_name="Mark", role="primary", set_as_default=True
         )
@@ -151,6 +156,9 @@ class StudioImageTests(unittest.TestCase):
         cfg.logo.role = "primary"
         cfg.logo.asset_id = asset.asset_id
         cfg.logo.placement = "bottom_right"
+        cfg.logo.size_mode = "standard"
+        cfg.logo.safe_margin_mode = "pixels"
+        cfg.logo.safe_margin_value = 48
         cfg.lighting.exposure = 0.1
         cfg.texture.grain_amount = 8
         cfg.export.format = "png"

@@ -77,6 +77,12 @@ Rules, in order of importance:
 7. Each option must be a genuinely different approach, not a reworded twin.
    Name a specific observed detail rather than a general feeling.
 8. Do not repeat the original wording back as an option.
+9. Do not use em dashes by default. Prefer periods, commas, colons,
+   parentheses, or separate sentences. Avoid decorative or habitual em dashes.
+   Never use multiple em dashes in one short piece of copy. An em dash may be
+   used only when it materially improves hook visibility, reading rhythm,
+   emotional emphasis, scanability, or conversion clarity. If you use one,
+   say that benefit in the rationale.
 
 Give each option a rationale of one short sentence saying what it does
 differently. Write the rationale for the person choosing between them.

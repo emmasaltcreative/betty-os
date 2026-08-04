@@ -12,7 +12,7 @@ import streamlit as st
 
 from src.common import DEFAULT_BRAND_ID
 from ui import nav
-from ui.campaign_state import CampaignState, finish_records_for_version
+from ui.campaign_state import CampaignState, active_finish_for_decide, finish_records_for_version
 from ui.components import (
     blocked_state,
     empty_state,
@@ -474,6 +474,14 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
             blocked_state("Creation stopped", str(outcome.get("error") or "Unknown error"))
             return
 
+        record = outcome.get("record")
+        if record is not None:
+            from studio.service import send_to_review
+
+            # Hand the new finish to Decide immediately so an older jade-badge
+            # ready_for_review version is not what the user still sees.
+            send_to_review(render_version.folder, record.finish_version_id)
+
         status.update(label=f"Draft ready for {ctx_title}.", state="complete")
         st.session_state["betty_flash"] = "I finished the strongest version."
         st.session_state["studio_pending_version_key"] = render_version.key
@@ -514,10 +522,7 @@ def _stage_decide(state: CampaignState, continuation) -> None:
             nav.goto_workspace("create")
         return
 
-    finishes = finish_records_for_version(version)
-    active = next((f for f in finishes if f.status == "ready_for_review"), None)
-    if active is None and finishes:
-        active = finishes[-1]
+    active = active_finish_for_decide(version)
 
     title = state.piece_title(version) or version.display_name
     platform = _platform_for(state, version)
@@ -528,18 +533,31 @@ def _stage_decide(state: CampaignState, continuation) -> None:
 
         preview = None
         if active is not None:
-            from studio.paths import finish_version_dir
+            from studio.versions import resolve_finish_output, resolve_finish_preview
 
-            folder = finish_version_dir(version.folder, active.finish_version_id)
-            out_dir = folder / "outputs"
-            if out_dir.is_dir():
-                candidates = sorted(out_dir.iterdir())
-                media = [
-                    p
-                    for p in candidates
-                    if p.suffix.lower() in {".mp4", ".mov", ".png", ".jpg", ".jpeg"}
-                ]
-                preview = media[0] if media else None
+            preview = resolve_finish_preview(version.folder, active) or resolve_finish_output(
+                version.folder, active
+            )
+            if preview is None:
+                from studio.paths import finish_version_dir
+
+                folder = finish_version_dir(version.folder, active.finish_version_id)
+                out_dir = folder / "outputs"
+                if out_dir.is_dir():
+                    candidates = sorted(out_dir.iterdir())
+                    media = [
+                        p
+                        for p in candidates
+                        if p.suffix.lower() in {".mp4", ".mov", ".png", ".jpg", ".jpeg"}
+                        and p.name.startswith("finished")
+                    ]
+                    if not media:
+                        media = [
+                            p
+                            for p in candidates
+                            if p.suffix.lower() in {".mp4", ".mov", ".png", ".jpg", ".jpeg"}
+                        ]
+                    preview = media[0] if media else None
         if preview is None and version.primary_path:
             preview = version.primary_path
         if preview and preview.is_file():
@@ -693,40 +711,89 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
             nav.goto_workspace("decide")
         return
 
+    from ui.export_service import (
+        actionable_incomplete_exclusions,
+        group_exclusions,
+    )
+
     plan = build_plan(state, mode=PUBLISHING_MODE, selected_keys=set())
     summary = plan.summary
+
     with st.container(border=True):
         if plan.is_blocked or plan.is_empty:
             st.markdown("**Publishing package blocked**")
             for blocker in plan.blockers or ["No publishable final assets."]:
                 quiet(blocker)
+            blocking = [
+                e for e in actionable_incomplete_exclusions(plan) if e.missing_fields
+            ]
+            if blocking:
+                st.write("")
+                note("Incomplete required copy")
+                for exclusion in blocking:
+                    fields = ", ".join(exclusion.missing_fields) or exclusion.reason
+                    quiet(f"{exclusion.label} — missing: {fields}")
+                if st.button("Complete Publishing Copy", key="ws_complete_blocking_copy"):
+                    st.session_state["ws_complete_excluded"] = True
+                    st.rerun()
         else:
-            st.markdown("**Publishing package ready**")
-
-        st.write("")
-        quiet("Included:")
-        if summary.included_lines:
-            for line in summary.included_lines:
-                st.markdown(f"- {line}")
-        elif plan.included:
-            for item in plan.included:
-                st.markdown(f"- {item.label}")
-        else:
-            quiet("Nothing publishable yet.")
-
-        if summary.excluded_lines or plan.excluded:
+            st.markdown("**Ready to publish**")
+            quiet(summary.readiness_headline or f"{len(plan.included)} items are ready to publish.")
             st.write("")
-            quiet("Excluded:")
-            for line in summary.excluded_lines[:12]:
-                st.markdown(f"- {line}")
-            if len(summary.excluded_lines) > 12:
-                quiet(f"…and {len(summary.excluded_lines) - 12} more.")
+            quiet(f"{summary.ready_item_count} final item{'s' if summary.ready_item_count != 1 else ''}")
 
-        if plan.warnings:
             st.write("")
-            note("Warnings")
-            for warning in plan.warnings:
+            st.markdown("**Automatically excluded**")
+            if summary.superseded_count:
+                quiet(
+                    f"{summary.superseded_count} superseded or replaced version"
+                    f"{'s' if summary.superseded_count != 1 else ''}"
+                )
+            if summary.rejected_count:
+                quiet(
+                    f"{summary.rejected_count} needs-revision item"
+                    f"{'s' if summary.rejected_count != 1 else ''}"
+                )
+            if summary.incomplete_count:
+                quiet(
+                    f"{summary.incomplete_count} incomplete metadata record"
+                    f"{'s' if summary.incomplete_count != 1 else ''}"
+                )
+            if summary.orphaned_count:
+                quiet(
+                    f"{summary.orphaned_count} metadata record"
+                    f"{'s' if summary.orphaned_count != 1 else ''} with no matching visual"
+                )
+            if summary.duplicate_count:
+                quiet(
+                    f"{summary.duplicate_count} duplicate"
+                    f"{'s' if summary.duplicate_count != 1 else ''} removed"
+                )
+            if not any(
+                [
+                    summary.superseded_count,
+                    summary.rejected_count,
+                    summary.incomplete_count,
+                    summary.orphaned_count,
+                    summary.duplicate_count,
+                ]
+            ):
+                quiet("Nothing was excluded.")
+
+            for info in plan.info_notes or summary.info_lines:
+                st.write("")
+                quiet(info)
+
+        if plan.summary.blocking_copy_lines or (
+            plan.validation_status == "ready_with_warnings" and plan.warnings
+        ):
+            st.write("")
+            note("Required publishing copy")
+            for warning in plan.summary.blocking_copy_lines or plan.warnings:
                 quiet(warning)
+            if st.button("Complete Publishing Copy", key="ws_complete_selected_copy"):
+                st.session_state["ws_complete_excluded"] = True
+                st.rerun()
             acknowledge = st.checkbox(
                 "I understand these warnings",
                 key="ws_ack_warnings",
@@ -734,12 +801,76 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
         else:
             acknowledge = True
 
+        actionable = actionable_incomplete_exclusions(plan)
+        if actionable and not plan.is_blocked:
+            st.write("")
+            label = (
+                f"Complete {len(actionable)} Excluded Item"
+                f"{'s' if len(actionable) != 1 else ''}"
+            )
+            if st.button(label, key="ws_complete_excluded_btn"):
+                st.session_state["ws_complete_excluded"] = True
+                st.rerun()
+
+        orphaned = [e for e in plan.excluded if e.category == "orphaned"]
+        if orphaned and not plan.is_blocked:
+            st.write("")
+            quiet("Metadata without a matching final visual:")
+            from ui.publishing_copy_fix import (
+                archive_incomplete_record,
+                matching_pin_template_for_piece,
+            )
+
+            for index, exclusion in enumerate(orphaned):
+                quiet(f"{exclusion.label} — {exclusion.reason}")
+                pin_template = matching_pin_template_for_piece(
+                    state, exclusion.content_piece_id
+                )
+                c1, c2 = st.columns(2)
+                with c1:
+                    if pin_template:
+                        if st.button(
+                            "Create Matching Pin",
+                            key=f"ws_create_pin_{index}",
+                        ):
+                            st.session_state["betty_flash"] = (
+                                f"Open Create to render {pin_template.replace('_', ' ')} "
+                                f"for this piece, then return to Deliver."
+                            )
+                            nav.goto_workspace(
+                                "create",
+                                piece_id=exclusion.content_piece_id,
+                            )
+                    else:
+                        quiet("No supported pin renderer is available for this piece.")
+                with c2:
+                    if st.button(
+                        "Archive Incomplete Record",
+                        key=f"ws_archive_orphan_{index}",
+                    ):
+                        result = archive_incomplete_record(state, exclusion)
+                        if result.get("ok"):
+                            st.session_state["betty_flash"] = (
+                                "Record archived. It will no longer affect package readiness."
+                            )
+                        else:
+                            st.session_state["betty_flash"] = str(
+                                result.get("error") or "Could not archive record."
+                            )
+                        st.rerun()
+
         st.write("")
         cols = st.columns([1, 1])
         with cols[0]:
-            create_disabled = plan.is_empty or plan.is_blocked or (
-                plan.validation_status == "ready_with_warnings" and not acknowledge
+            create_disabled = not plan.create_enabled and not (
+                plan.validation_status == "ready_with_warnings" and acknowledge
             )
+            if plan.is_empty or plan.is_blocked:
+                create_disabled = True
+            elif plan.validation_status == "ready_with_warnings" and not acknowledge:
+                create_disabled = True
+            else:
+                create_disabled = False
             if st.button(
                 "Create Publishing Package",
                 type="primary",
@@ -776,26 +907,49 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
             )
             quiet(f"{Path(last).name} · {human_size(Path(last).stat().st_size)}")
 
+    if st.session_state.get("ws_complete_excluded"):
+        _deliver_complete_excluded(state, plan)
+
     if st.session_state.get("ws_show_plan"):
-        with st.expander("Exclusions and lineage", expanded=True):
-            key_values(
-                [
-                    ("Publishable items", len(plan.included)),
-                    ("Excluded", len(plan.excluded)),
-                    ("Duplicates removed", len(plan.duplicates_removed)),
-                    ("Earlier packages", len(list_existing_packages(state))),
-                ]
-            )
+        with st.expander("Review Exclusions", expanded=True):
+            grouped = group_exclusions(plan.excluded)
+            labels = {
+                "incomplete": "Incomplete (actionable first)",
+                "orphaned": "No matching final visual",
+                "rejected": "Needs revision",
+                "duplicate": "Duplicates",
+                "superseded": "Superseded or replaced",
+                "other": "Other",
+                "excluded": "Other",
+            }
+            for category, items in grouped.items():
+                if category == "superseded":
+                    with st.expander(
+                        f"{labels[category]} ({len(items)})",
+                        expanded=False,
+                    ):
+                        for exclusion in items:
+                            quiet(f"{exclusion.label} — {exclusion.reason}")
+                    continue
+                st.markdown(f"**{labels.get(category, category)} ({len(items)})**")
+                for exclusion in items:
+                    detail = exclusion.reason
+                    if exclusion.missing_fields:
+                        detail = f"{detail} · missing: {', '.join(exclusion.missing_fields)}"
+                    quiet(f"{exclusion.label} — {detail}")
+                st.write("")
+
+            quiet(f"Publishable items: {len(plan.included)}")
             for item in plan.included:
                 lineage = item.finish_version_id or item.render_version_id or ""
                 quiet(f"{item.label} · {item.platform} · {lineage}")
-            for exclusion in plan.excluded:
-                quiet(f"{exclusion.label} — {exclusion.reason}")
 
     packages = list_existing_packages(state)
-    if packages:
-        with st.expander("Earlier packages", expanded=False):
-            for path, created, size in packages[:5]:
+    with st.expander("Package History", expanded=False):
+        if not packages:
+            quiet("No earlier packages for this campaign.")
+        else:
+            for path, created, size in packages[:8]:
                 quiet(f"{path.name} · {created} · {size}")
                 if path.is_file():
                     st.download_button(
@@ -804,6 +958,84 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
                         file_name=path.name,
                         key=f"ws_pkg_{path.name}",
                     )
+
+
+def _deliver_complete_excluded(state: CampaignState, plan) -> None:
+    from ui.publishing_copy_fix import (
+        approve_draft,
+        edit_draft,
+        mark_needs_revision,
+        open_completion_session,
+        revalidate_after_completion,
+    )
+
+    session = st.session_state.get("ws_completion_session")
+    if session is None:
+        session = open_completion_session(state, plan)
+        st.session_state["ws_completion_session"] = session
+
+    with st.expander("Complete excluded publishing copy", expanded=True):
+        if not session.drafts:
+            quiet("No actionable incomplete records to complete.")
+            if st.button("Close", key="ws_complete_close_empty"):
+                st.session_state["ws_complete_excluded"] = False
+                st.session_state.pop("ws_completion_session", None)
+                st.rerun()
+            return
+
+        quiet(
+            "One Brand Guide-aligned description per record. "
+            "Approve to save a clean metadata file. Records enter the package only "
+            "when paired with final Pin media."
+        )
+        for index, draft in enumerate(session.drafts):
+            st.markdown(f"**{draft.exclusion.label}**")
+            if draft.exclusion.missing_fields:
+                quiet(f"Missing: {', '.join(draft.exclusion.missing_fields)}")
+            quiet(f"Platform: {draft.platform}")
+            if draft.content_piece_id:
+                quiet(f"Content piece: {draft.content_piece_id}")
+            edited = st.text_area(
+                "Description",
+                value=draft.description,
+                key=f"ws_complete_desc_{index}",
+                height=120,
+            )
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("Approve", key=f"ws_complete_approve_{index}"):
+                    approve_draft(draft, text=edited)
+                    st.session_state["betty_flash"] = draft.message
+                    plan = revalidate_after_completion(state)
+                    st.session_state["ws_completion_session"] = open_completion_session(
+                        state, plan
+                    )
+                    st.rerun()
+            with c2:
+                if st.button("Needs Revision", key=f"ws_complete_needs_{index}"):
+                    mark_needs_revision(draft)
+                    st.session_state["betty_flash"] = draft.message
+                    st.rerun()
+            with c3:
+                if st.button("Save Edit", key=f"ws_complete_edit_{index}"):
+                    edit_draft(draft, edited)
+                    st.session_state["betty_flash"] = draft.message
+                    st.rerun()
+            if draft.message:
+                quiet(draft.message)
+            st.write("")
+
+        if st.button("Revalidate package", key="ws_complete_revalidate"):
+            plan = revalidate_after_completion(state)
+            st.session_state["ws_completion_session"] = open_completion_session(state, plan)
+            st.session_state["betty_flash"] = (
+                f"Revalidated: {plan.summary.readiness_headline}"
+            )
+            st.rerun()
+        if st.button("Close", key="ws_complete_close"):
+            st.session_state["ws_complete_excluded"] = False
+            st.session_state.pop("ws_completion_session", None)
+            st.rerun()
 
 
 # --- Journal + Advanced -----------------------------------------------------

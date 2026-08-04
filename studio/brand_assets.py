@@ -309,3 +309,181 @@ def jpg_transparency_note(path: Path) -> str | None:
         "JPG does not support transparency. Prefer SVG or transparent PNG for logos "
         "that sit over imagery."
     )
+
+
+# Preferred roles when Automatic Studio selects a mark.
+PREFERRED_MARK_ROLES: tuple[str, ...] = (
+    "wordmark",
+    "monogram",
+    "light",
+    "dark",
+    "primary",
+    "secondary",
+    "watermark",
+    "emblem",
+)
+
+# Minimum safe inset for auto-applied marks (readable spacing, not a UI badge).
+AUTO_LOGO_MIN_MARGIN_PX = 48.0
+AUTO_LOGO_MIN_MARGIN_RATIO = 0.04  # 4% of canvas width
+AUTO_LOGO_MIN_WIDTH_PX = 72
+
+
+def analyze_mark_pixels(path: Path) -> dict:
+    """Classify whether a logo file is a real transparent mark or a solid badge.
+
+    The Oh Betty seed asset is a jade rectangle with only edge padding alpha —
+    that must not be treated as a suitable brand wordmark.
+    """
+    path = Path(path)
+    result = {
+        "path": str(path),
+        "ok": False,
+        "has_alpha_channel": False,
+        "transparent_pixel_ratio": 0.0,
+        "opaque_pixel_ratio": 0.0,
+        "dominant_opaque_share": 0.0,
+        "unique_opaque_colors": 0,
+        "bbox_fill_ratio": 0.0,
+        "looks_like_solid_rectangle": False,
+        "suitable_transparent_mark": False,
+        "reason": "",
+    }
+    if not path.is_file():
+        result["reason"] = "Logo file is missing."
+        return result
+    if path.suffix.lower() == ".svg":
+        result["ok"] = True
+        result["has_alpha_channel"] = True
+        result["suitable_transparent_mark"] = True
+        result["reason"] = "SVG marks are treated as transparent vector artwork."
+        return result
+    try:
+        with Image.open(path) as img:
+            img.load()
+            rgba = img.convert("RGBA")
+            width, height = rgba.size
+            pixels = rgba.load()
+    except OSError as exc:
+        result["reason"] = f"Logo could not be read: {exc}"
+        return result
+
+    total = width * height or 1
+    # Soft-opaque samples (a >= 200) capture fills that are deliberately
+    # semi-transparent badges (e.g. jade at alpha 230), not only a=255.
+    fill_colors: list[tuple[int, int, int]] = []
+    soft_opaque = 0
+    transparent = 0
+    min_x = width
+    min_y = height
+    max_x = -1
+    max_y = -1
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            if a < 32:
+                transparent += 1
+                continue
+            if a >= 200:
+                soft_opaque += 1
+                fill_colors.append((r, g, b))
+                if x < min_x:
+                    min_x = x
+                if y < min_y:
+                    min_y = y
+                if x > max_x:
+                    max_x = x
+                if y > max_y:
+                    max_y = y
+
+    result["ok"] = True
+    result["has_alpha_channel"] = True
+    result["transparent_pixel_ratio"] = transparent / total
+    result["opaque_pixel_ratio"] = soft_opaque / total
+
+    if soft_opaque == 0:
+        result["reason"] = "Logo has no opaque pixels."
+        return result
+
+    buckets: dict[tuple[int, int, int], int] = {}
+    for r, g, b in fill_colors:
+        key = (r // 12 * 12, g // 12 * 12, b // 12 * 12)
+        buckets[key] = buckets.get(key, 0) + 1
+    dominant = max(buckets.values()) if buckets else 0
+    result["unique_opaque_colors"] = len(buckets)
+    result["dominant_opaque_share"] = dominant / soft_opaque
+
+    if max_x >= min_x and max_y >= min_y:
+        bbox_area = max(1, (max_x - min_x + 1) * (max_y - min_y + 1))
+        result["bbox_fill_ratio"] = soft_opaque / bbox_area
+    else:
+        result["bbox_fill_ratio"] = 0.0
+
+    # Solid rectangular badge: one dominant fill packing the opaque bbox.
+    # Anti-aliased edge crumbs can inflate unique_opaque_colors, so dominant
+    # share + bbox fill are the primary signals.
+    looks_badge = (
+        result["dominant_opaque_share"] >= 0.85
+        and result["bbox_fill_ratio"] >= 0.80
+        and result["opaque_pixel_ratio"] >= 0.40
+    )
+    result["looks_like_solid_rectangle"] = looks_badge
+
+    if looks_badge:
+        result["suitable_transparent_mark"] = False
+        result["reason"] = (
+            "Logo looks like a solid-color rectangular badge rather than a "
+            "transparent wordmark or monogram."
+        )
+        return result
+
+    if result["transparent_pixel_ratio"] < 0.05 and result["dominant_opaque_share"] >= 0.9:
+        result["suitable_transparent_mark"] = False
+        result["reason"] = "Logo asset lacks meaningful transparency."
+        return result
+
+    result["suitable_transparent_mark"] = True
+    result["reason"] = "Transparent mark with varied artwork."
+    return result
+
+
+def is_suitable_transparent_mark(asset: BrandAssetRecord) -> bool:
+    if asset is None:
+        return False
+    if not asset.has_transparency and Path(asset.file_path).suffix.lower() not in {".svg"}:
+        # JPG / opaque raster — not preferred for overlay.
+        analysis = analyze_mark_pixels(resolve_asset_path(asset))
+        return bool(analysis.get("suitable_transparent_mark"))
+    analysis = analyze_mark_pixels(resolve_asset_path(asset))
+    return bool(analysis.get("suitable_transparent_mark"))
+
+
+def select_best_logo_asset(
+    brand_id: str = DEFAULT_BRAND_ID,
+    *,
+    preferred_roles: tuple[str, ...] | None = None,
+) -> BrandAssetRecord | None:
+    """Pick the best transparent mark, preferring wordmark / monogram / light / dark."""
+    roles = preferred_roles or PREFERRED_MARK_ROLES
+    seen: set[str] = set()
+    for role in roles:
+        asset = default_asset_for_role(role, brand_id)
+        if asset is None or asset.asset_id in seen:
+            continue
+        seen.add(asset.asset_id)
+        if is_suitable_transparent_mark(asset):
+            return asset
+    # Fall through: any active asset that is suitable, regardless of role order.
+    for asset in list_assets(brand_id):
+        if asset.asset_id in seen:
+            continue
+        if is_suitable_transparent_mark(asset):
+            return asset
+    return None
+
+
+def auto_logo_safe_margin_px(canvas_width: int | None = None) -> float:
+    """Readable inset so auto marks never sit flush against the edge."""
+    if canvas_width and canvas_width > 0:
+        return max(AUTO_LOGO_MIN_MARGIN_PX, float(canvas_width) * AUTO_LOGO_MIN_MARGIN_RATIO)
+    return AUTO_LOGO_MIN_MARGIN_PX

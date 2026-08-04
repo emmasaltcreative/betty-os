@@ -385,6 +385,36 @@ class RecommendationCopyTests(unittest.TestCase):
             if result.current_state != "blocked":
                 self.assertEqual(primary_blockers_for_display(result), [])
 
+    def test_decide_prefers_newest_ready_for_review_finish(self) -> None:
+        """Older jade-badge ready_for_review must not beat a newer omit finish."""
+        from ui.campaign_state import active_finish_for_decide
+
+        version = MagicMock()
+        version.version = 1
+        version.folder = Path("/tmp/unused")
+
+        old = MagicMock(
+            finish_version_id="finish_v001",
+            status="ready_for_review",
+            updated_at="2026-07-27T10:00:00Z",
+        )
+        newer = MagicMock(
+            finish_version_id="finish_v007",
+            status="ready_for_review",
+            updated_at="2026-08-04T12:00:00Z",
+        )
+        draft = MagicMock(
+            finish_version_id="finish_v006",
+            status="draft",
+            updated_at="2026-08-04T11:00:00Z",
+        )
+        with patch(
+            "ui.campaign_state.finish_records_for_version",
+            return_value=[old, draft, newer],
+        ):
+            active = active_finish_for_decide(version)
+        self.assertIs(active, newer)
+
 
 class PrimaryActionSelectionTests(unittest.TestCase):
     def test_each_state_has_one_primary_label(self) -> None:

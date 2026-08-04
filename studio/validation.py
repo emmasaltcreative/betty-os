@@ -9,7 +9,12 @@ import numpy as np
 from PIL import Image, ImageStat
 
 from studio import SUPPORTED_STATIC, SUPPORTED_VIDEO
-from studio.brand_assets import get_asset, resolve_asset_path
+from studio.brand_assets import (
+    analyze_mark_pixels,
+    auto_logo_safe_margin_px,
+    get_asset,
+    resolve_asset_path,
+)
 from studio.image_pipeline import SIZE_MODE_PERCENT, load_source_image, logo_box, rasterize_logo
 from studio.luts import get_lut, parse_cube, resolve_lut_path
 from studio.models import FinishConfiguration, ValidationItem
@@ -214,6 +219,8 @@ def validate_logo(
         items.append(_item("logo_asset", "fail", "Logo asset could not be resolved."))
         return items
 
+    items.extend(brand_guardian_logo_asset_checks(asset))
+
     try:
         mark = rasterize_logo(resolve_asset_path(asset))
     except Exception as exc:  # noqa: BLE001
@@ -241,15 +248,15 @@ def validate_logo(
     lw = max(1, int(cw * (percent / 100.0)))
     lh = max(1, int(lw * (mark.height / max(1, mark.width))))
 
+    min_readable = max(int(asset.minimum_display_width or 0), 72)
     if lw > cw or lh > ch:
         items.append(_item("logo_size", "fail", "Logo is larger than the canvas."))
-    elif lw < asset.minimum_display_width:
+    elif lw < min_readable:
         items.append(
             _item(
-                "logo_min_size",
-                "warning",
-                f"Logo width {lw}px is below the minimum readable size "
-                f"({asset.minimum_display_width}px).",
+                "brand_guardian_unreadable_logo",
+                "fail",
+                f"Logo width {lw}px is below the minimum readable size ({min_readable}px).",
             )
         )
     else:
@@ -262,6 +269,17 @@ def validate_logo(
     else:
         margin = float(asset.default_safe_margin)
 
+    min_margin = auto_logo_safe_margin_px(cw)
+    if margin + 0.5 < min_margin:
+        items.append(
+            _item(
+                "brand_guardian_logo_edge",
+                "fail",
+                f"Logo safe margin ({margin:.0f}px) is too close to the edge; "
+                f"need at least {min_margin:.0f}px.",
+            )
+        )
+
     x, y = logo_box((cw, ch), (lw, lh), logo, safe_margin_px=margin)
     if x < -1 or y < -1 or x + lw > cw + 1 or y + lh > ch + 1:
         items.append(_item("logo_bounds", "fail", "Logo extends outside the canvas."))
@@ -271,6 +289,14 @@ def validate_logo(
                 "logo_margin",
                 "fail",
                 "Logo does not respect the configured safe margin.",
+            )
+        )
+    elif x < min_margin - 1 or y < min_margin - 1 or x + lw > cw - min_margin + 1 or y + lh > ch - min_margin + 1:
+        items.append(
+            _item(
+                "brand_guardian_logo_edge",
+                "fail",
+                "Logo placement sits too close to the frame edge.",
             )
         )
     else:
@@ -291,7 +317,6 @@ def validate_logo(
             if region.width > 0 and region.height > 0:
                 stat = ImageStat.Stat(region.convert("L"))
                 bg = stat.mean[0] / 255.0
-                # Approximate logo luminance
                 logo_resized = mark.resize((max(1, region.width), max(1, region.height)))
                 rgb = np.asarray(logo_resized.convert("RGBA")).astype(np.float32)
                 alpha = rgb[..., 3] / 255.0
@@ -320,8 +345,8 @@ def validate_logo(
         _item(
             "logo_semantics",
             "pass",
-            "Logo validation uses known layout regions and placement contrast, "
-            "not semantic object detection or motion tracking.",
+            "Brand Guardian logo checks cover readability, edge spacing, "
+            "badge-like fills, and transparency — not semantic object detection.",
         )
     )
 
@@ -342,6 +367,50 @@ def validate_logo(
         else:
             items.append(_item("logo_timing", "pass", f"Logo timing mode: {logo.timing_mode}."))
 
+    return items
+
+
+def brand_guardian_logo_asset_checks(asset) -> list[ValidationItem]:
+    """Brand Guardian: block badge-like / opaque marks that read as UI chrome."""
+    from studio.brand_assets import resolve_asset_path as _resolve
+
+    items: list[ValidationItem] = []
+    path = _resolve(asset)
+    analysis = analyze_mark_pixels(path)
+
+    if not asset.has_transparency and path.suffix.lower() not in {".svg"}:
+        items.append(
+            _item(
+                "brand_guardian_logo_no_transparency",
+                "fail",
+                "Logo asset lacks transparency; prefer a transparent PNG/SVG wordmark.",
+            )
+        )
+    elif analysis.get("looks_like_solid_rectangle"):
+        items.append(
+            _item(
+                "brand_guardian_logo_badge",
+                "fail",
+                "Logo appears as a colored rectangular badge rather than a brand mark.",
+                analysis.get("reason") or "",
+            )
+        )
+    elif not analysis.get("suitable_transparent_mark"):
+        items.append(
+            _item(
+                "brand_guardian_logo_no_transparency",
+                "fail",
+                analysis.get("reason") or "Logo asset is not a suitable transparent mark.",
+            )
+        )
+    else:
+        items.append(
+            _item(
+                "brand_guardian_logo_asset",
+                "pass",
+                "Logo asset is a suitable transparent mark.",
+            )
+        )
     return items
 
 

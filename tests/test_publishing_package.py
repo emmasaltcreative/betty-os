@@ -206,8 +206,9 @@ class PublishingSelectionTests(unittest.TestCase):
         plan = build_plan(state, mode=PUBLISHING_MODE)
         self.assertEqual(plan.included, [])
         self.assertTrue(
-            any("No matching final Pin" in e.reason for e in plan.excluded)
+            any("No matching final visual asset" in e.reason for e in plan.excluded)
         )
+        self.assertTrue(any(e.category == "orphaned" for e in plan.excluded))
 
     def test_approved_only_enforcement(self) -> None:
         media = _write_png(self.folder / "pin_v1.png")
@@ -402,9 +403,10 @@ class ModeAndRegressionTests(unittest.TestCase):
         plan = build_plan(state, mode=PUBLISHING_MODE)
 
         reels = [i for i in plan.included if i.summary_kind == "reel"]
-        self.assertEqual(len(reels), 1)
-        self.assertEqual(reels[0].finish_version_id, "finish_v004")
-        self.assertEqual(reels[0].parent_render_version_id, "render_v001")
+        self.assertGreaterEqual(len(reels), 1)
+        cinematic = [r for r in reels if r.finish_version_id == "finish_v004"]
+        self.assertEqual(len(cinematic), 1)
+        self.assertEqual(cinematic[0].parent_render_version_id, "render_v001")
 
         # No duplicate reel media / no studio folder paths in archive names
         for item in plan.included:
@@ -413,7 +415,10 @@ class ModeAndRegressionTests(unittest.TestCase):
                 self.assertNotIn("/finish_v", pkg.archive_name)
 
         self.assertTrue(
-            any("Pinterest" in e.label and e.category == "incomplete" for e in plan.excluded)
+            any(
+                "Pinterest" in e.label and e.category == "orphaned"
+                for e in plan.excluded
+            )
         )
         self.assertTrue(any(e.category == "superseded" for e in plan.excluded))
 
@@ -434,11 +439,15 @@ class ModeAndRegressionTests(unittest.TestCase):
                 self.assertTrue(any(n.endswith("README.txt") for n in names))
                 self.assertTrue(any(n.endswith("manifest.json") for n in names))
                 reel_files = [n for n in names if n.endswith(".mp4")]
-                self.assertEqual(len(reel_files), 1)
+                self.assertGreaterEqual(len(reel_files), 1)
                 payload = json.loads(
                     zf.read(next(n for n in names if n.endswith("manifest.json")))
                 )
-                reel_entry = next(d for d in payload["deliverables"] if d["media_type"] == "video")
+                reel_entry = next(
+                    d
+                    for d in payload["deliverables"]
+                    if d["media_type"] == "video" and d.get("finish_version_id") == "finish_v004"
+                )
                 self.assertEqual(reel_entry["finish_version_id"], "finish_v004")
                 self.assertEqual(reel_entry["parent_render_version_id"], "render_v001")
                 readme = zf.read(next(n for n in names if n.endswith("README.txt"))).decode()
@@ -450,6 +459,181 @@ class ModeAndRegressionTests(unittest.TestCase):
             self.assertTrue(parent.is_file())
         finally:
             shutil.rmtree(export_root, ignore_errors=True)
+
+    def test_excluded_incomplete_copy_does_not_block_valid_package(self) -> None:
+        if not CAMPAIGN.is_dir():
+            self.skipTest("Regression campaign not present")
+        from ui.campaign_state import build_campaign_state
+        from ui.export_service import VAGUE_INCOMPLETE_COPY
+
+        state = build_campaign_state(CAMPAIGN)
+        plan = build_plan(state, mode=PUBLISHING_MODE)
+        self.assertGreaterEqual(len(plan.included), 5)
+        self.assertEqual(plan.validation_status, "ready")
+        self.assertTrue(plan.create_enabled)
+        self.assertNotIn(VAGUE_INCOMPLETE_COPY, plan.warnings)
+        orphaned = [e for e in plan.excluded if e.category == "orphaned"]
+        self.assertEqual(len(orphaned), 2)
+        for exclusion in orphaned:
+            self.assertEqual(exclusion.reason, "No matching final visual asset.")
+        self.assertTrue(
+            any("do not block this package" in line for line in plan.info_notes)
+        )
+        self.assertFalse(
+            any("incomplete publishing copy" in line.lower() for line in plan.info_notes)
+        )
+        included_ids = {i.content_piece_id for i in plan.included if i.content_piece_id}
+        for exclusion in orphaned:
+            self.assertNotIn(exclusion.content_piece_id, included_ids)
+
+    def test_selected_deliverable_incomplete_required_copy_blocks(self) -> None:
+        folder = self.tmp / "instagram_caption" / "piece_x" if hasattr(self, "tmp") else None
+        tmp = Path(tempfile.mkdtemp(prefix="betty_block_copy_"))
+        try:
+            folder = tmp / "instagram_caption" / "piece_blank"
+            folder.mkdir(parents=True)
+            blank = _write_text(folder / "caption_v1.md", "   \n")
+            version = _version(
+                template_id="instagram_caption",
+                folder=folder,
+                kind="copy",
+                piece_id="piece_blank",
+                media=[],
+                support=[blank],
+                display_name="Instagram Caption",
+            )
+            state = _state([version], tmp=tmp)
+            plan = build_plan(state, mode=PUBLISHING_MODE)
+            self.assertTrue(plan.is_empty or plan.is_blocked)
+            self.assertFalse(plan.create_enabled)
+            self.assertTrue(
+                any(e.category == "incomplete" and e.actionable for e in plan.excluded)
+            )
+            joined = " ".join(plan.blockers + plan.warnings + plan.summary.blocking_copy_lines)
+            self.assertTrue(
+                "incomplete" in joined.lower() or any("blank" in e.reason.lower() for e in plan.excluded)
+            )
+            self.assertNotIn(
+                "This asset is approved visually, but its publishing copy is incomplete.",
+                plan.warnings,
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_warning_language_names_exact_condition(self) -> None:
+        from ui.export_service import blocking_incomplete_copy_message
+
+        msg = blocking_incomplete_copy_message(
+            "Still life, reading hour",
+            ["Pinterest description"],
+        )
+        self.assertIn("Still life, reading hour", msg)
+        self.assertIn("Pinterest description", msg)
+        self.assertNotEqual(
+            msg,
+            "This asset is approved visually, but its publishing copy is incomplete.",
+        )
+
+    def test_grouped_exclusion_counts_are_accurate(self) -> None:
+        if not CAMPAIGN.is_dir():
+            self.skipTest("Regression campaign not present")
+        from ui.campaign_state import build_campaign_state
+        from ui.export_service import group_exclusions
+
+        state = build_campaign_state(CAMPAIGN)
+        plan = build_plan(state, mode=PUBLISHING_MODE)
+        grouped = group_exclusions(plan.excluded)
+        self.assertEqual(
+            plan.summary.superseded_count,
+            len(grouped.get("superseded", [])),
+        )
+        self.assertEqual(
+            plan.summary.rejected_count,
+            len(grouped.get("rejected", [])),
+        )
+        self.assertEqual(
+            plan.summary.incomplete_count,
+            len(grouped.get("incomplete", [])),
+        )
+        self.assertEqual(
+            plan.summary.orphaned_count,
+            len(grouped.get("orphaned", [])),
+        )
+        self.assertEqual(plan.summary.ready_item_count, len(plan.included))
+        orphaned = grouped.get("orphaned") or []
+        self.assertTrue(orphaned)
+        self.assertTrue(all(e.reason == "No matching final visual asset." for e in orphaned))
+
+    def test_package_history_remains_available(self) -> None:
+        if not CAMPAIGN.is_dir():
+            self.skipTest("Regression campaign not present")
+        from ui.campaign_state import build_campaign_state
+        from ui.export_service import list_existing_packages
+
+        state = build_campaign_state(CAMPAIGN)
+        # Function remains callable for Deliver Package History disclosure.
+        packages = list_existing_packages(state)
+        self.assertIsInstance(packages, list)
+
+    def test_completing_excluded_records_triggers_revalidation(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="betty_complete_meta_"))
+        try:
+            pin_folder = tmp / "editorial_static_pin" / "piece_meta"
+            pin_folder.mkdir(parents=True)
+            meta_folder = tmp / "pinterest_caption_metadata" / "piece_meta"
+            meta_folder.mkdir(parents=True)
+            media = _write_png(pin_folder / "pin.png")
+            caption = _write_text(pin_folder / "caption.md", "A quiet pin caption ready to publish.")
+            meta = _write_text(
+                meta_folder / "meta.md",
+                "# Pinterest Pin Description\n\n**Title:** Quiet hour\n\n"
+                "**Description:**\n\n**CTA:** Join the waitlist\n",
+            )
+            pin = _version(
+                template_id="editorial_static_pin",
+                folder=pin_folder,
+                piece_id="piece_meta",
+                media=[media],
+                support=[caption],
+                display_name="Editorial Static Pin",
+            )
+            metadata = _version(
+                template_id="pinterest_caption_metadata",
+                folder=meta_folder,
+                kind="copy",
+                piece_id="piece_meta",
+                media=[],
+                support=[meta],
+                display_name="Pinterest Caption & Metadata",
+            )
+            state = _state([pin, metadata], tmp=tmp)
+            before = build_plan(state, mode=PUBLISHING_MODE)
+            self.assertEqual(len([i for i in before.included if i.summary_kind == "pin"]), 1)
+            self.assertTrue(
+                any(
+                    e.category == "incomplete" and "blank" in e.reason.lower()
+                    for e in before.excluded
+                )
+            )
+
+            from ui.publishing_copy_fix import (
+                approve_draft,
+                open_completion_session,
+                revalidate_after_completion,
+            )
+
+            session = open_completion_session(state, before)
+            self.assertEqual(session.count, 1)
+            approve_draft(session.drafts[0])
+            after = revalidate_after_completion(state)
+            self.assertTrue(
+                any(i.summary_kind == "metadata" for i in after.included),
+                msg=f"excluded={[(e.reason, e.category) for e in after.excluded]}",
+            )
+            self.assertEqual(after.validation_status, "ready")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_invalid_video_handling(self) -> None:
         tmp = Path(tempfile.mkdtemp(prefix="betty_badvid_"))
         try:

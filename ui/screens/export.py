@@ -150,6 +150,10 @@ def _plan_preview(plan, mode: str) -> None:
             else:
                 quiet("Nothing is being left out.")
 
+    if plan.info_notes or plan.summary.info_lines:
+        for info in plan.info_notes or plan.summary.info_lines:
+            quiet(info)
+
     if plan.warnings:
         note("Warnings must be acknowledged before creating the package.")
         for warning in plan.warnings:

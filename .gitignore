@@ -15,3 +15,6 @@ outputs/*
 library/thumbnails/*
 !library/thumbnails/.gitkeep
 outputs/.review_frames/
+
+# BettyOS generated Studio previews
+brands/*/studio/preview_cache/

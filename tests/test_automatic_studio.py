@@ -368,5 +368,229 @@ class AutomaticStudioTests(unittest.TestCase):
         self.assertTrue(any(r.record_id == "perf_001" for r in listed))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class LogoTreatmentRegressionTests(unittest.TestCase):
+    """Current-draft case: Oh Betty seed jade badge must never auto-apply."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="betty_logo_reg_"))
+        self.source = self.tmp / "reading_hour.png"
+        Image.new("RGB", (1080, 1920), (228, 219, 205)).save(self.source)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_seed_jade_rectangle_is_not_a_suitable_mark(self) -> None:
+        from studio.brand_assets import analyze_mark_pixels, select_best_logo_asset
+
+        seed = (
+            ROOT
+            / "brands"
+            / DEFAULT_BRAND_ID
+            / "studio"
+            / "assets"
+            / "ba_12a2e9d21f_seed_logo.png"
+        )
+        if not seed.is_file():
+            self.skipTest("Oh Betty seed logo missing")
+        analysis = analyze_mark_pixels(seed)
+        self.assertTrue(analysis["looks_like_solid_rectangle"])
+        self.assertFalse(analysis["suitable_transparent_mark"])
+        self.assertIsNone(select_best_logo_asset(DEFAULT_BRAND_ID))
+
+    def test_current_instagram_reel_draft_omits_jade_badge(self) -> None:
+        """Regression: Reading Hour Instagram Reels draft must omit the jade badge."""
+        decision, config = build_edit_decision(
+            brand_id=DEFAULT_BRAND_ID,
+            campaign_id="2026-07-27_191825_campaign",
+            content_piece_id="piece_001_the_part_of_the_day_that_s_yours",
+            template_id="cinematic_multi_clip_reel",
+            platform="Instagram Reels (9:16)",
+            campaign_goal=(
+                "Grow a qualified waitlist for First Edition: The Reading Hour "
+                "by making the reading ritual feel recognized, specific, and worth waiting for."
+            ),
+            piece_objective="The part of the day that's yours",
+            piece_format="Instagram Reels (9:16)",
+            media_type="static",
+            source_file=self.source,
+            overlay_copy="The part of the day that's yours.",
+        )
+        self.assertEqual(decision.logo_decision.value, "omit")
+        self.assertEqual(config.logo.role, "none")
+        self.assertIsNone(config.logo.asset_id)
+        self.assertNotIn("ba_12a2e9d21f", str(config.logo.to_dict()))
+
+    def test_editorial_pin_omits_when_only_badge_exists(self) -> None:
+        from studio.auto_edit import decide_logo
+
+        choice, reason, _source, logo = decide_logo(
+            brand_id=DEFAULT_BRAND_ID,
+            platform="Pinterest (2:3)",
+            content_type="editorial_pin",
+            campaign_goal="Grow waitlist",
+            piece_objective="Still life, reading hour",
+            overlay_mentions_brand=False,
+            findings=[],
+        )
+        self.assertEqual(choice, "omit")
+        self.assertEqual(logo.role, "none")
+        self.assertTrue(
+            "transparent" in reason.lower()
+            or "badge" in reason.lower()
+            or "composition" in reason.lower()
+            or "atmosphere" in reason.lower()
+        )
+
+    def test_brand_named_in_copy_omits_logo(self) -> None:
+        from studio.auto_edit import decide_logo
+
+        choice, reason, _source, logo = decide_logo(
+            brand_id=DEFAULT_BRAND_ID,
+            platform="Instagram Reels",
+            content_type="lifestyle_reel",
+            campaign_goal="Grow waitlist",
+            piece_objective="Evening ritual",
+            overlay_mentions_brand=True,
+            findings=[],
+        )
+        self.assertEqual(choice, "omit")
+        self.assertEqual(logo.role, "none")
+        self.assertIn("named", reason.lower())
+
+    def test_brand_guardian_rejects_badge_and_tight_margin(self) -> None:
+        from studio.models import FinishConfiguration, LogoConfiguration
+        from studio.validation import validate_logo
+
+        seed_id = "ba_12a2e9d21f"
+        cfg = FinishConfiguration()
+        cfg.logo = LogoConfiguration(
+            role="primary",
+            asset_id=seed_id,
+            placement="bottom_right",
+            size_mode="subtle",
+            safe_margin_mode="pixels",
+            safe_margin_value=12,
+        )
+        items = validate_logo(
+            cfg,
+            brand_id=DEFAULT_BRAND_ID,
+            canvas_size=(1080, 1920),
+            duration=None,
+            media_type="static",
+            source=self.source,
+        )
+        codes = {i.code for i in items if i.outcome == "fail"}
+        self.assertIn("brand_guardian_logo_badge", codes)
+        self.assertTrue(
+            "brand_guardian_logo_edge" in codes or "brand_guardian_unreadable_logo" in codes
+        )
+
+    def test_suitable_transparent_wordmark_can_still_apply_for_product(self) -> None:
+        from studio.auto_edit import decide_logo
+        from studio.brand_assets import upload_brand_asset
+        from PIL import ImageDraw
+
+        brand = f"logo_ok_{self.tmp.name}"
+        brand_dir = ROOT / "brands" / brand
+        brand_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            mark = self.tmp / "wordmark.png"
+            img = Image.new("RGBA", (220, 64), (0, 0, 0, 0))
+            ImageDraw.Draw(img).text((10, 18), "Oh Betty", fill=(30, 30, 30, 255))
+            img.save(mark)
+            upload_brand_asset(
+                mark,
+                brand_id=brand,
+                display_name="Wordmark",
+                role="wordmark",
+                set_as_default=True,
+            )
+            choice, _reason, _source, logo = decide_logo(
+                brand_id=brand,
+                platform="Email",
+                content_type="product",
+                campaign_goal="Sell the collection",
+                piece_objective="Product hero",
+                overlay_mentions_brand=False,
+                findings=[],
+            )
+            self.assertEqual(choice, "required")
+            self.assertEqual(logo.role, "wordmark")
+            self.assertIsNotNone(logo.asset_id)
+            self.assertGreaterEqual(logo.safe_margin_value, 48)
+        finally:
+            shutil.rmtree(brand_dir, ignore_errors=True)
+
+    def test_omit_finish_pixels_have_no_solid_jade_bottom_right(self) -> None:
+        """When logo omission is selected, finished pixels must not contain the jade badge."""
+        from studio.image_pipeline import process_static_image
+        from studio.models import FinishConfiguration, LogoConfiguration
+        from studio.overlay_diagnostics import overlay_events
+
+        out = self.tmp / "omit_finished.png"
+        cfg = FinishConfiguration()
+        cfg.logo = LogoConfiguration(role="none")
+        result = process_static_image(
+            self.source,
+            cfg,
+            brand_id=DEFAULT_BRAND_ID,
+            output_path=out,
+            preview_path=self.tmp / "omit_preview.jpg",
+        )
+        self.assertTrue(result.get("ok"))
+        self.assertTrue(out.is_file())
+        jade_frac = _bottom_right_jade_fraction(out)
+        self.assertLess(
+            jade_frac,
+            0.01,
+            f"Solid jade rectangle still present in bottom-right (frac={jade_frac:.4f})",
+        )
+        applied = [e for e in overlay_events() if e.applied and e.kind == "logo"]
+        self.assertEqual(applied, [])
+
+    def test_pipeline_hard_blocks_seed_jade_badge_even_if_config_requests_it(self) -> None:
+        """Pixel path must refuse ba_12a2e9d21f even when an old finish config asks for it."""
+        from studio.image_pipeline import process_static_image
+        from studio.models import FinishConfiguration, LogoConfiguration
+        from studio.overlay_diagnostics import overlay_events
+
+        # Baseline: compositing the seed onto cream would leave a dense jade block.
+        out = self.tmp / "blocked_finished.png"
+        cfg = FinishConfiguration()
+        cfg.logo = LogoConfiguration(
+            role="primary",
+            asset_id="ba_12a2e9d21f",
+            placement="bottom_right",
+            size_mode="subtle",
+            opacity=0.8,
+        )
+        result = process_static_image(
+            self.source,
+            cfg,
+            brand_id=DEFAULT_BRAND_ID,
+            output_path=out,
+        )
+        self.assertTrue(result.get("ok"))
+        jade_frac = _bottom_right_jade_fraction(out)
+        self.assertLess(
+            jade_frac,
+            0.01,
+            f"Hard-block failed; jade badge written (frac={jade_frac:.4f})",
+        )
+        skipped = [
+            e
+            for e in overlay_events()
+            if e.kind == "skipped_logo" and e.asset_id == "ba_12a2e9d21f"
+        ]
+        self.assertTrue(skipped, "Expected diagnostic skip for seed badge")
+        self.assertFalse(any(e.applied and e.kind == "logo" for e in overlay_events()))
+
+
+def _bottom_right_jade_fraction(path: Path, *, jade=(47, 111, 94), tol: float = 35.0) -> float:
+    import numpy as np
+
+    img = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32)
+    h, w, _ = img.shape
+    region = img[int(h * 0.88) :, int(w * 0.82) :]
+    dist = np.linalg.norm(region - np.array(jade, dtype=np.float32), axis=-1)
+    return float((dist < tol).mean())
