@@ -214,8 +214,6 @@ def create_finished_version(
         config_payload = config.to_dict()
         atomic_write_json(tmp_parent / "finish_config.json", config_payload)
         atomic_write_json(tmp_parent / "validation.json", validation)
-        atomic_write_json(tmp_parent / "edit_decision.json", edit_decision or {})
-        atomic_write_json(tmp_parent / "execution_report.json", execution_report or {})
 
         record = FinishRecord(
             finish_version_id=finish_id,
@@ -255,6 +253,9 @@ def create_finished_version(
             creative_review_score=creative_review_score,
         )
         atomic_write_json(tmp_parent / "finish_metadata.json", record.to_dict())
+        # Always persist decision/report artifacts for audit (empty when manual finish).
+        atomic_write_json(tmp_parent / "edit_decision.json", edit_decision or {})
+        atomic_write_json(tmp_parent / "execution_report.json", execution_report or {})
 
         # Atomic move into place
         os_replace_dir(tmp_parent, final_dir)

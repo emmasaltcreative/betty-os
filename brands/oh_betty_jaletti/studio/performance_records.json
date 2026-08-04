@@ -1,0 +1,30 @@
+{
+  "records": [
+    {
+      "record_id": "perf_test_1",
+      "campaign_id": "camp_auto",
+      "content_piece_id": "piece_auto",
+      "template_id": "ritual_reel",
+      "render_version_id": "render_v001",
+      "finish_version_id": "finish_v001",
+      "platform": "instagram",
+      "publication_id": null,
+      "destination_url": null,
+      "tracking_parameters": {},
+      "impressions": 1000,
+      "views": 800,
+      "watch_time_seconds": null,
+      "completion_rate": 0.42,
+      "saves": null,
+      "shares": null,
+      "comments": null,
+      "outbound_clicks": null,
+      "landing_page_sessions": null,
+      "waitlist_signups": null,
+      "conversion_rate": null,
+      "recorded_at": "2026-08-04T00:46:20+00:00",
+      "notes": ""
+    }
+  ],
+  "updated_at": "2026-08-04T00:46:20+00:00"
+}

@@ -1,0 +1,65 @@
+{
+  "events": [
+    {
+      "event_id": "evt_28da5aade5db",
+      "brand_id": "oh_betty_jaletti",
+      "campaign_id": "camp_auto",
+      "content_piece_id": "piece_auto",
+      "template_id": "ritual_reel",
+      "render_version_id": "render_v001",
+      "finish_version_id": "finish_v002",
+      "status": "approved",
+      "revision_note": "The color feels too warm and the logo is distracting.",
+      "edit_decision_id": "ed_acec59242bd7",
+      "content_type": "lifestyle_reel",
+      "platform": "Instagram Reels",
+      "logo_decision": "omit",
+      "recipe_id": "obj_editorial_lifestyle",
+      "resulting_changes": {
+        "approval_status": "approved"
+      },
+      "created_at": "2026-08-04T00:45:52+00:00"
+    },
+    {
+      "event_id": "evt_643499d7267e",
+      "brand_id": "oh_betty_jaletti",
+      "campaign_id": "2026-07-27_191825_campaign",
+      "content_piece_id": "piece_001_the_part_of_the_day_that_s_yours",
+      "template_id": "editorial_static_pin",
+      "render_version_id": "render_v001",
+      "finish_version_id": "finish_v003",
+      "status": "approved",
+      "revision_note": "The color feels too warm and the logo is distracting.",
+      "edit_decision_id": "ed_7a6092cd1f68",
+      "content_type": "editorial_pin",
+      "platform": "Pinterest",
+      "logo_decision": "omit",
+      "recipe_id": "obj_pinterest_editorial",
+      "resulting_changes": {
+        "approval_status": "approved"
+      },
+      "created_at": "2026-08-04T00:46:12+00:00"
+    },
+    {
+      "event_id": "evt_aa4458a7a94b",
+      "brand_id": "oh_betty_jaletti",
+      "campaign_id": "camp_auto",
+      "content_piece_id": "piece_auto",
+      "template_id": "ritual_reel",
+      "render_version_id": "render_v001",
+      "finish_version_id": "finish_v002",
+      "status": "approved",
+      "revision_note": "The color feels too warm and the logo is distracting.",
+      "edit_decision_id": "ed_4c6722763dfb",
+      "content_type": "lifestyle_reel",
+      "platform": "Instagram Reels",
+      "logo_decision": "omit",
+      "recipe_id": "obj_editorial_lifestyle",
+      "resulting_changes": {
+        "approval_status": "approved"
+      },
+      "created_at": "2026-08-04T00:46:22+00:00"
+    }
+  ],
+  "updated_at": "2026-08-04T00:46:22+00:00"
+}

@@ -1,6 +1,6 @@
 {
   "brand_id": "oh_betty_jaletti",
-  "updated_at": "2026-07-28T18:36:44+00:00",
+  "updated_at": "2026-08-04T00:46:22+00:00",
   "capabilities": {
     "Brand Asset Upload": {
       "name": "Brand Asset Upload",
@@ -46,8 +46,8 @@
       "implementation_note": "Exposure/brightness/contrast/highlights/shadows/whites/blacks/gamma.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:58+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -57,8 +57,8 @@
       "implementation_note": "Temperature/tint/sat/vibrance/fade/lift/RGB balance.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:58+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -68,8 +68,8 @@
       "implementation_note": "Seeded numpy grain at final resolution.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:58+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -79,8 +79,8 @@
       "implementation_note": "Soft radial vignette with feather/midpoint.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:58+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -90,8 +90,8 @@
       "implementation_note": "Pillow sharpness enhance.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:58+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -101,8 +101,8 @@
       "implementation_note": "Crop, rotate, straighten, aspect fit/fill/pad.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:59+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -112,8 +112,8 @@
       "implementation_note": "Persistent brand recipes with version history.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T18:18:01+00:00",
-        "note": "obj_rainy_reading"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "obj_editorial_lifestyle"
       },
       "last_failure": null
     },
@@ -180,17 +180,20 @@
       "implementation_note": "dynaudnorm when audio exists.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T18:18:01+00:00",
-        "note": "finish_v002"
+        "at": "2026-07-28T19:31:39+00:00",
+        "note": "finish_v004"
       },
       "last_failure": null
     },
     "Before-and-After Static Preview": {
       "name": "Before-and-After Static Preview",
-      "status": "Planned",
+      "status": "Ready",
       "implementation_note": "Original vs processed proxy preview.",
       "known_limitation": "Proxy may differ slightly from full-res.",
-      "last_successful_test": null,
+      "last_successful_test": {
+        "at": "2026-07-28T19:30:13+00:00",
+        "note": "Proxy preview generated"
+      },
       "last_failure": null
     },
     "Before-and-After Video Preview": {
@@ -199,7 +202,7 @@
       "implementation_note": "Separate original/processed previews.",
       "known_limitation": "Synchronized scrub not implemented.",
       "last_successful_test": {
-        "at": "2026-07-28T18:09:57+00:00",
+        "at": "2026-08-04T00:10:34+00:00",
         "note": "Processed preview frame"
       },
       "last_failure": null
@@ -210,7 +213,7 @@
       "implementation_note": "Immutable finish_vNNN directories with atomic move.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T18:18:01+00:00",
+        "at": "2026-08-04T00:46:22+00:00",
         "note": "finish_v002"
       },
       "last_failure": null
@@ -221,8 +224,8 @@
       "implementation_note": "Download finished PNG/JPG/WebP when file validates.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T13:48:59+00:00",
-        "note": "finish_v001"
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     },
@@ -232,8 +235,8 @@
       "implementation_note": "Download finished MP4 when file validates.",
       "known_limitation": "",
       "last_successful_test": {
-        "at": "2026-07-28T18:18:01+00:00",
-        "note": "finish_v002"
+        "at": "2026-07-28T19:31:39+00:00",
+        "note": "finish_v004"
       },
       "last_failure": null
     },
@@ -245,6 +248,17 @@
       "last_successful_test": {
         "at": "2026-07-28T18:36:44+00:00",
         "note": "finish_v001"
+      },
+      "last_failure": null
+    },
+    "Automatic Best Edit": {
+      "name": "Automatic Best Edit",
+      "status": "Ready",
+      "implementation_note": "Brand Guide + Production Rules drive one recommended finish automatically.",
+      "known_limitation": "Selective AI cleanup requires a configured provider and is reported honestly when unavailable.",
+      "last_successful_test": {
+        "at": "2026-08-04T00:46:22+00:00",
+        "note": "finish_v002"
       },
       "last_failure": null
     }

@@ -42,8 +42,9 @@ STUDIO_CAPABILITIES = [
 def _defaults() -> dict[str, dict[str, Any]]:
     notes = {
         "Automatic Best Edit": (
-            "One brand-informed generated finish with structured decision and execution report.",
-            "Selective AI cleanup is listed as unsupported unless a cleanup provider is configured.",
+            "Brand Guide + Production Rules drive one recommended finish with a structured "
+            "decision and execution report.",
+            "Selective AI cleanup requires a configured provider and is reported honestly when unavailable.",
         ),
         "Brand Asset Upload": ("Persistent upload under brands/*/studio/assets.", ""),
         "SVG Logo Preview": (

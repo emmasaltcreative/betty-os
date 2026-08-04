@@ -1,16 +1,19 @@
-"""Automatic brand-informed Studio finishing decisions."""
+"""Opinionated automatic edit engine — one best finish from Brand Guide + Production Rules."""
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from src.brand import BRAND_BRAIN_FILES, load_brand_brain
-from src.common import DEFAULT_BRAND_ID, PRODUCTION_DIR
+from src.common import DEFAULT_BRAND_ID, PRODUCTION_DIR, ROOT
 from src.persistence import load_json
 from studio.apply_recipe import apply_recipe_to_config
-from studio.brand_assets import default_asset_for_role
+from studio.brand_assets import default_asset_for_role, list_assets
 from studio.edit_decision import (
     AppliedAction,
     CleanupRecommendation,
@@ -19,8 +22,13 @@ from studio.edit_decision import (
     ExecutionReport,
     NotAppliedAction,
 )
-from studio.learning import list_creative_preferences
-from studio.models import FinishConfiguration, PLATFORM_EXPORT_PRESETS
+from studio.learning import list_creative_findings, list_performance_findings
+from studio.models import (
+    PLATFORM_EXPORT_PRESETS,
+    FinishConfiguration,
+    LogoConfiguration,
+    VideoAdjustments,
+)
 from studio.recipes import ColorRecipe, ensure_default_recipes, list_recipes
 
 _AI_CLEANUP_ENV = (
@@ -30,551 +38,1014 @@ _AI_CLEANUP_ENV = (
 )
 
 
-def load_brand_guide(brand_id: str = DEFAULT_BRAND_ID) -> tuple[str, bool, list[str]]:
-    try:
-        return load_brand_brain(brand_id), True, list(BRAND_BRAIN_FILES)
-    except Exception:  # noqa: BLE001
-        return "", False, []
+# Potential selective-cleanup categories — never claimed applied without a provider.
+CLEANUP_CATEGORIES = (
+    "flyaway hair",
+    "chipped nail polish",
+    "temporary skin blemishes",
+    "clothing lint",
+    "clothing wrinkles",
+    "fingerprints",
+    "product dust",
+    "loose fibers",
+    "small distracting background objects",
+    "minor reflections",
+    "uneven localized lighting",
+)
 
-
-def load_production_rules() -> tuple[dict[str, Any], bool, list[str]]:
-    rules: dict[str, Any] = {}
-    files: list[str] = []
-    if not PRODUCTION_DIR.is_dir():
-        return rules, False, files
-    for path in sorted(PRODUCTION_DIR.glob("*.json")):
-        data = load_json(path, default=None)
-        if isinstance(data, dict):
-            rules[path.stem] = data
-            files.append(path.name)
-    return rules, bool(files), files
+# Recipe scoring cues derived from Brand Guide + piece/platform context.
+_RECIPE_HINTS: dict[str, tuple[str, ...]] = {
+    "obj_editorial_lifestyle": ("editorial", "lifestyle", "reel", "instagram", "ritual"),
+    "obj_rainy_reading": ("rain", "reading", "cozy", "interior", "window"),
+    "obj_morning_window": ("morning", "window", "light", "daylight"),
+    "obj_product_flatlay": ("product", "flatlay", "still", "detail"),
+    "obj_pinterest_editorial": ("pinterest", "pin", "editorial", "2:3", "4:5"),
+    "obj_email_hero": ("email", "hero", "newsletter"),
+    "obj_clean_product": ("clean", "product", "catalog", "white"),
+    "obj_autumn_reading": ("autumn", "fall", "reading", "seasonal"),
+    "obj_winter_ritual": ("winter", "ritual", "candle", "evening"),
+    "obj_vintage_film": ("vintage", "film", "nostalgic", "grain"),
+}
 
 
 def ai_cleanup_provider_configured() -> bool:
-    return any(os.getenv(name, "").strip() for name in _AI_CLEANUP_ENV)
+    """True when an AI cleanup provider env/token is configured."""
+    for key in _AI_CLEANUP_ENV:
+        if str(os.environ.get(key) or "").strip():
+            return True
+    return False
+
+
+def load_brand_guide(brand_id: str = DEFAULT_BRAND_ID) -> tuple[str, bool, list[str]]:
+    """Return (brand_text, loaded?, brand_guide_files)."""
+    files: list[str] = []
+    brand_dir = ROOT / "brands" / brand_id
+    for name in BRAND_BRAIN_FILES:
+        if (brand_dir / name).is_file():
+            files.append(name)
+    try:
+        text = load_brand_brain(brand_id)
+        return text, bool(files), files
+    except Exception as exc:  # noqa: BLE001
+        return str(exc), False, files
+
+
+def load_production_rules() -> tuple[dict[str, Any], bool, list[str]]:
+    """Load all Production Rules JSON files (named + any extras under production/)."""
+    preferred = (
+        "exports.json",
+        "layout.json",
+        "typography.json",
+        "colors.json",
+        "animation.json",
+        "global_defaults.json",
+        "safe_zones.json",
+    )
+    rules: dict[str, Any] = {}
+    files: list[str] = []
+    seen: set[str] = set()
+    for name in preferred:
+        path = PRODUCTION_DIR / name
+        data = load_json(path, default=None)
+        if isinstance(data, dict):
+            stem = name.replace(".json", "")
+            rules[stem] = data
+            files.append(name)
+            seen.add(name)
+    if PRODUCTION_DIR.is_dir():
+        for path in sorted(PRODUCTION_DIR.glob("*.json")):
+            if path.name in seen:
+                continue
+            data = load_json(path, default=None)
+            if isinstance(data, dict):
+                rules[path.stem] = data
+                files.append(path.name)
+    return rules, bool(rules), files
+
+
+def load_production_rules_raw() -> dict[str, Any]:
+    """Load Production Rules JSON files used for technical execution."""
+    rules, _, _ = load_production_rules()
+    return rules
+
+
+def brand_guide_sections(brand_id: str = DEFAULT_BRAND_ID) -> dict[str, str]:
+    brand_dir = ROOT / "brands" / brand_id
+    sections: dict[str, str] = {}
+    for name in BRAND_BRAIN_FILES:
+        path = brand_dir / name
+        if path.is_file():
+            sections[name.replace(".md", "")] = path.read_text(encoding="utf-8")
+    return sections
+
+
+def _infer_content_type(
+    *,
+    template_id: str,
+    platform: str,
+    piece_format: str,
+    piece_objective: str,
+    media_type: str,
+    content_type: str = "",
+) -> str:
+    explicit = (content_type or "").strip().lower()
+    if explicit:
+        if explicit in {"lifestyle", "lifestyle_reel"}:
+            return "lifestyle_reel"
+        if explicit in {"product", "product_flatlay"}:
+            return "product"
+        if "pin" in explicit or "pinterest" in explicit:
+            return "editorial_pin"
+        if "email" in explicit:
+            return "email_hero"
+        if "editorial" in explicit:
+            return "editorial_static"
+        return explicit.replace(" ", "_")
+    blob = " ".join(
+        [template_id, platform, piece_format, piece_objective, media_type]
+    ).lower()
+    if "email" in blob:
+        return "email_hero"
+    if "pinterest" in blob or "pin" in blob:
+        return "editorial_pin"
+    if "product" in blob or "flatlay" in blob:
+        return "product"
+    if "lifestyle" in blob or "reel" in blob or "tiktok" in blob or "story" in blob:
+        return "lifestyle_reel"
+    if media_type == "video":
+        return "lifestyle_reel"
+    return "editorial_static"
+
+
+def _platform_export_key(platform: str, content_type: str, media_type: str) -> str:
+    blob = f"{platform} {content_type}".lower()
+    if "email" in blob:
+        return "email_hero"
+    if "pinterest" in blob or "pin" in blob:
+        return "pinterest_pin"
+    if "story" in blob:
+        return "story"
+    if "reel" in blob or "tiktok" in blob:
+        return "instagram_reel"
+    if "feed" in blob or "instagram" in blob:
+        return "instagram_feed" if media_type == "static" else "instagram_reel"
+    return "original"
+
+
+def _score_recipe(
+    recipe: ColorRecipe,
+    *,
+    media_type: str,
+    platform: str,
+    content_type: str,
+    context_blob: str,
+    brand_text: str,
+) -> float:
+    score = 0.0
+    if media_type in (recipe.suitable_media_types or []) or not recipe.suitable_media_types:
+        score += 2.0
+    plat = platform.lower()
+    for tag in recipe.suitable_platforms or []:
+        if tag.lower() in plat or plat in tag.lower():
+            score += 2.0
+    for tag in recipe.suitable_content_types or []:
+        if tag.lower() in content_type or tag.lower() in context_blob:
+            score += 1.5
+    hints = _RECIPE_HINTS.get(recipe.recipe_id, ())
+    haystack = f"{context_blob} {brand_text[:2000]}".lower()
+    for hint in hints:
+        if hint in haystack:
+            score += 1.0
+    # Prefer editorial lifestyle as restrained default for OBJ
+    if recipe.recipe_id == "obj_editorial_lifestyle":
+        score += 0.5
+    # Brand Guide rejects heavy color grading / novelty filters
+    if recipe.recipe_id == "obj_vintage_film" and "vintage" not in context_blob:
+        score -= 2.0
+    if "product" in content_type and "product" in recipe.recipe_id:
+        score += 3.0
+    if "email" in content_type and "email" in recipe.recipe_id:
+        score += 3.0
+    if "pin" in content_type and "pinterest" in recipe.recipe_id:
+        score += 3.0
+    if "reel" in content_type and "lifestyle" in recipe.recipe_id:
+        score += 2.0
+    return score
 
 
 def select_best_recipe(
     *,
-    brand_id: str = DEFAULT_BRAND_ID,
-    platform: str = "",
-    content_type: str = "",
-    brand_text: str = "",
-    media_type: str = "static",
-) -> ColorRecipe:
+    brand_id: str,
+    media_type: str,
+    platform: str,
+    content_type: str,
+    campaign_goal: str,
+    piece_objective: str,
+    template_id: str,
+    brand_text: str,
+) -> tuple[ColorRecipe, str]:
+    ensure_default_recipes(brand_id)
     recipes = list_recipes(brand_id)
     if not recipes:
-        recipes = ensure_default_recipes(brand_id)
-    platform_norm = _normalise_platform(platform)
-    content_norm = _normalise_content_type(content_type, brand_text)
-    text = f"{platform_norm} {content_norm} {brand_text}".lower()
-
-    def score(recipe: ColorRecipe) -> tuple[int, str]:
-        total = 0
-        rid = recipe.recipe_id.lower()
-        desc = f"{recipe.display_name} {recipe.description}".lower()
-        if media_type in recipe.suitable_media_types:
-            total += 5
-        if platform_norm and any(platform_norm.startswith(p) or p in platform_norm for p in recipe.suitable_platforms):
-            total += 4
-        if content_norm in recipe.suitable_content_types:
-            total += 4
-        if "pinterest" in text and "pinterest" in rid:
-            total += 10
-        if "email" in text and "email" in rid:
-            total += 10
-        if "product" in content_norm and ("product" in rid or "product" in desc):
-            total += 8
-        if "lifestyle" in content_norm and ("lifestyle" in rid or "editorial" in rid):
-            total += 8
-        if any(word in text for word in ("rain", "rainy")) and "rainy" in rid:
-            total += 6
-        if "window" in text and "window" in rid:
-            total += 5
-        return total, recipe.recipe_id
-
-    return max(recipes, key=score)
+        raise RuntimeError("No Color Recipes available for this brand.")
+    context_blob = " ".join(
+        [platform, content_type, campaign_goal, piece_objective, template_id]
+    ).lower()
+    ranked = sorted(
+        recipes,
+        key=lambda r: _score_recipe(
+            r,
+            media_type=media_type,
+            platform=platform,
+            content_type=content_type,
+            context_blob=context_blob,
+            brand_text=brand_text,
+        ),
+        reverse=True,
+    )
+    best = ranked[0]
+    reason = (
+        f"Selected {best.display_name} as the single best match for "
+        f"{content_type} on {platform or 'this platform'}."
+    )
+    return best, reason
 
 
 def decide_logo(
     *,
-    brand_id: str = DEFAULT_BRAND_ID,
-    platform: str = "",
-    content_type: str = "",
-    overlay_copy: str = "",
-    media_type: str = "static",
-) -> dict[str, Any]:
-    platform_norm = _normalise_platform(platform)
-    content_norm = _normalise_content_type(content_type, overlay_copy)
-    text = overlay_copy.lower()
-    brand_named = "oh betty" in text or "betty jaletti" in text or "obj" in text
-    preference_omit = any(
-        f.status == "promoted"
-        and "avoid persistent logo overlays" in f.statement.lower()
-        and "lifestyle" in content_norm
-        and ("instagram" in platform_norm or "reel" in platform_norm)
-        for f in list_creative_preferences(brand_id)
+    brand_id: str,
+    platform: str,
+    content_type: str,
+    campaign_goal: str,
+    piece_objective: str,
+    overlay_mentions_brand: bool,
+    findings: list[Any],
+) -> tuple[str, str, str, LogoConfiguration]:
+    """Return (choice, reason, source, logo_config). choice: required|optional|omit."""
+    blob = f"{platform} {content_type} {campaign_goal} {piece_objective}".lower()
+
+    # Preference findings can inform but do not override explicit product/email needs
+    prefer_omit = any(
+        "logo" in (f.finding or "").lower() and "avoid" in (f.finding or "").lower()
+        for f in findings
     )
-    if preference_omit:
-        return {
-            "decision": "omit",
-            "placement": "none",
-            "timing_mode": "none",
-            "reason": "Promoted Studio preference avoids persistent logo overlays on OBJ lifestyle reels.",
-        }
-    if content_norm == "lifestyle" and ("instagram" in platform_norm or "reel" in platform_norm):
-        return {
-            "decision": "omit",
-            "placement": "none",
-            "timing_mode": "none",
-            "reason": "Lifestyle reels should feel editorial; persistent logo overlays distract from the scene.",
-        }
-    if brand_named:
-        return {
-            "decision": "omit",
-            "placement": "none",
-            "timing_mode": "none",
-            "reason": "Brand is already named in copy, so a logo overlay would be redundant.",
-        }
-    if content_norm == "product":
-        return {
-            "decision": "optional",
-            "placement": "bottom_right",
-            "timing_mode": "full" if media_type == "static" else "closing",
-            "reason": "Product work can carry a subtle mark when an approved brand asset exists.",
-        }
-    return {
-        "decision": "optional",
-        "placement": "bottom_right",
-        "timing_mode": "closing" if media_type == "video" else "full",
-        "reason": "Defaulting to subtle brand presence only when an asset is available.",
-    }
+
+    if "email" in blob or "product" in content_type:
+        choice = "required"
+        reason = "Product and email surfaces need a clear brand mark for recognition."
+        source = "Brand Guide, platform requirement"
+    elif overlay_mentions_brand or "lifestyle_reel" in content_type or "lifestyle" in content_type:
+        choice = "omit"
+        reason = (
+            "Lifestyle reel already carries brand presence through atmosphere and copy; "
+            "a persistent logo would compete with visual hierarchy."
+        )
+        source = "Brand Guide, prior approval feedback" if prefer_omit else "Brand Guide"
+    elif "pinterest" in blob or "pin" in content_type:
+        choice = "optional"
+        reason = "Editorial pins can carry a subtle mark; omit when composition is dense."
+        source = "Brand Guide"
+        if prefer_omit:
+            choice = "omit"
+            reason = "Prior approvals favor omitting logos on lifestyle/editorial social."
+            source = "prior approval feedback"
+    else:
+        choice = "optional"
+        reason = "Optional subtle brand presence when a primary logo asset exists."
+        source = "Brand Guide"
+
+    if prefer_omit and choice != "required":
+        choice = "omit"
+        reason = (
+            "Creative-preference findings and Brand Guide both favor omitting "
+            "persistent logo overlays for this content type."
+        )
+        source = "prior approval feedback, Brand Guide"
+
+    logo = LogoConfiguration(role="none")
+    if choice in {"required", "optional"}:
+        asset = default_asset_for_role("primary", brand_id) or (
+            list_assets(brand_id)[0] if list_assets(brand_id) else None
+        )
+        if asset:
+            logo = LogoConfiguration(
+                role=asset.role,
+                asset_id=asset.asset_id,
+                placement="bottom_right",
+                size_mode="subtle",
+                opacity=min(0.8, 0.75),
+                timing_mode="closing" if "reel" in content_type else "full",
+            )
+        elif choice == "required":
+            choice = "omit"
+            reason = "Logo was preferred but no brand logo asset is configured."
+            source = "asset analysis"
+        else:
+            choice = "omit"
+            reason = "Optional logo omitted — no brand logo asset is configured."
+            source = "asset analysis"
+    return choice, reason, source, logo
+
+
+def _map_static_to_video(config: FinishConfiguration) -> VideoAdjustments:
+    """Map recipe static grade into video adjustments when finishing video."""
+    light = config.lighting
+    color = config.color
+    tex = config.texture
+    return VideoAdjustments(
+        brightness=max(-1.0, min(1.0, (light.brightness or 0.0) / 100.0)),
+        contrast=max(0.5, min(2.0, 1.0 + (light.contrast or 0.0) / 200.0)),
+        saturation=max(0.0, min(2.0, 1.0 + (color.saturation or 0.0) / 100.0)),
+        gamma=float(light.gamma or 1.0),
+        temperature=float(color.temperature or 0.0),
+        fade=float(color.fade or 0.0),
+        grain=float(tex.grain_amount or 0.0),
+        sharpen=float(tex.sharpening or 0.0),
+        vignette=float(tex.vignette_amount or 0.0),
+    )
+
+
+def _apply_production_export(
+    config: FinishConfiguration,
+    *,
+    media_type: str,
+    platform_key: str,
+    rules: dict[str, Any],
+) -> tuple[FinishConfiguration, str]:
+    exports = rules.get("exports") or {}
+    geo = config.geometry
+    preset = PLATFORM_EXPORT_PRESETS.get(platform_key) or PLATFORM_EXPORT_PRESETS["original"]
+    geo.platform_preset = platform_key
+    if preset.get("width"):
+        geo.output_width = preset["width"]
+        geo.output_height = preset["height"]
+        geo.aspect_preset = {
+            "instagram_reel": "9:16",
+            "story": "9:16",
+            "instagram_feed": "4:5",
+            "pinterest_pin": "2:3",
+            "email_hero": "original",
+        }.get(platform_key, geo.aspect_preset)
+        if platform_key != "original":
+            geo.crop_mode = "fill"
+            geo.fit_mode = "fill"
+    config.geometry = geo
+
+    export = config.export
+    if media_type == "video":
+        export.format = "mp4"
+        export.fps = float(exports.get("fps") or export.fps or 30)
+        export.codec = str(exports.get("codec") or export.codec or "libx264")
+        export.bitrate = str(exports.get("bitrate") or export.bitrate or "8M")
+        compression = exports.get("compression") or {}
+        export.quality_preset = str(compression.get("preset") or export.quality_preset)
+        # Production Rules default audio behavior is remove; keep normalize off claim honest
+        audio_behavior = (exports.get("audio") or {}).get("behavior")
+        export.audio_normalize = audio_behavior != "remove"
+        export.fade_in_seconds = 0.0
+        export.fade_out_seconds = min(0.25, float(export.fade_out_seconds or 0.0) or 0.15)
+    else:
+        if export.format not in {"png", "jpg", "webp"}:
+            export.format = "png"
+        export.quality = max(export.quality, 90)
+    config.export = export
+    reason = f"Applied Production Rules export defaults and platform preset {platform_key}."
+    return config, reason
+
+
+def _selective_cleanup_recommendations() -> list[CleanupRecommendation]:
+    # Detection is never claimed without a provider; recommendations stay honest.
+    return [
+        CleanupRecommendation(
+            issue=issue,
+            classification="ai_provider_required",
+            reason=(
+                "AI cleanup provider configured but detection not implemented yet."
+                if ai_cleanup_provider_configured()
+                else "No AI image-editing provider is configured; selective cleanup was not performed."
+            ),
+            detected=False,
+            applied=False,
+            unsupported_reason="ai_provider_required",
+        )
+        for issue in CLEANUP_CATEGORIES
+    ]
+
+
+def _heuristic_review_score(config: FinishConfiguration, logo_choice: str) -> float:
+    """Lightweight creative-review score — not a model grade."""
+    score = 78.0
+    # Restraint rewards
+    if abs(config.color.saturation) <= 15:
+        score += 4
+    if config.texture.grain_amount <= 16:
+        score += 3
+    if logo_choice == "omit":
+        score += 3
+    if config.color.temperature > 25:
+        score -= 6
+    if config.texture.grain_amount > 20:
+        score -= 4
+    return max(40.0, min(96.0, score))
 
 
 def build_edit_decision(
     *,
-    source_file: Path,
     brand_id: str = DEFAULT_BRAND_ID,
-    platform: str = "",
-    content_type: str = "",
-    campaign_goal: str = "",
+    campaign_id: str = "",
+    content_piece_id: str | None = None,
     template_id: str = "",
+    platform: str = "",
+    campaign_goal: str = "",
+    piece_objective: str = "",
+    piece_format: str = "",
+    content_type: str = "",
+    media_type: str | None = None,
+    source_file: Path,
+    parent_render_version_id: str = "render_v001",
+    parent_finish_version_id: str | None = None,
     overlay_copy: str = "",
     cta_copy: str = "",
-    media_type: str | None = None,
+    duration_seconds: float | None = None,
+    revision_note: str | None = None,
+    revision_of: str | None = None,
+    base_config: FinishConfiguration | None = None,
 ) -> tuple[EditDecision, FinishConfiguration]:
-    source_file = Path(source_file)
-    media = media_type or _media_type_for(source_file)
+    """Produce one structured EditDecision and the FinishConfiguration to apply it."""
+    conflicts: list[str] = []
     brand_text, brand_loaded, brand_files = load_brand_guide(brand_id)
     rules, rules_loaded, rule_files = load_production_rules()
-    content_norm = _normalise_content_type(content_type or template_id, f"{campaign_goal} {overlay_copy}")
-    platform_norm = _normalise_platform(platform)
-    recipe = select_best_recipe(
-        brand_id=brand_id,
-        platform=platform_norm,
-        content_type=content_norm,
-        brand_text=f"{brand_text} {campaign_goal} {template_id}",
-        media_type=media,
+
+    if media_type is None:
+        suffix = Path(source_file).suffix.lower()
+        media_type = "video" if suffix in {".mp4", ".mov", ".m4v", ".webm"} else "static"
+
+    resolved_content_type = _infer_content_type(
+        template_id=template_id,
+        platform=platform,
+        piece_format=piece_format or content_type,
+        piece_objective=piece_objective or campaign_goal,
+        media_type=media_type,
+        content_type=content_type,
     )
-    config = apply_recipe_to_config(recipe, FinishConfiguration())
-    _apply_platform_export(config, platform_norm, media, rules)
-    if media == "video":
-        _map_static_grade_to_video(config)
-    logo = decide_logo(
+    findings = list_creative_findings(brand_id)
+    perf_findings = list_performance_findings(brand_id)
+
+    recipe, recipe_reason = select_best_recipe(
         brand_id=brand_id,
-        platform=platform_norm,
-        content_type=content_norm,
-        overlay_copy=overlay_copy,
-        media_type=media,
+        media_type=media_type,
+        platform=platform,
+        content_type=resolved_content_type,
+        campaign_goal=campaign_goal,
+        piece_objective=piece_objective or campaign_goal,
+        template_id=template_id,
+        brand_text=brand_text,
     )
-    _apply_logo_decision(config, logo, brand_id)
-    cleanup = _cleanup_recommendations(media)
-    unsupported = [
-        NotAppliedAction(
-            action=f"selective_cleanup:{item.category}",
-            reason=item.reason,
-            unsupported_reason=item.unsupported_reason,
+
+    config = apply_recipe_to_config(recipe, base_config or FinishConfiguration())
+
+    overlay_mentions_brand = bool(
+        re.search(r"oh\s*betty|jaletti|obj\b", overlay_copy or "", re.I)
+    )
+    logo_choice, logo_reason, logo_source, logo_cfg = decide_logo(
+        brand_id=brand_id,
+        platform=platform,
+        content_type=resolved_content_type,
+        campaign_goal=campaign_goal,
+        piece_objective=piece_objective or campaign_goal,
+        overlay_mentions_brand=overlay_mentions_brand,
+        findings=findings,
+    )
+    # Recipe may want a logo; Brand Guide / findings win for lifestyle
+    if logo_choice == "omit":
+        if (config.logo.role not in {"", "none"}) or config.logo.asset_id:
+            conflicts.append(
+                "Color Recipe suggested a logo; Brand Guide / preference findings omit it."
+            )
+        config.logo = LogoConfiguration(role="none")
+    else:
+        merged = {**config.logo.to_dict(), **logo_cfg.to_dict()}
+        if recipe.logo_defaults:
+            for key in ("placement", "size_mode", "opacity"):
+                if key in recipe.logo_defaults and logo_choice != "omit":
+                    merged[key] = recipe.logo_defaults[key]
+        config.logo = LogoConfiguration.from_dict(merged)
+
+    platform_key = _platform_export_key(platform, resolved_content_type, media_type)
+    config, export_reason = _apply_production_export(
+        config, media_type=media_type, platform_key=platform_key, rules=rules
+    )
+
+    if media_type == "video":
+        config.video = _map_static_to_video(config)
+        config.export.format = "mp4"
+
+    revision_actions: list[AppliedAction] = []
+    if revision_note:
+        logo_choice_ref: list[str] = []
+        config, revision_actions = apply_revision_note_to_config(
+            config, revision_note, logo_choice_ref
         )
-        for item in cleanup
-        if not item.applied
+        if logo_choice_ref:
+            logo_choice = logo_choice_ref[0]
+            logo_reason = f"Revision feedback: {revision_note}"
+            logo_source = "prior approval feedback"
+            if logo_choice == "omit":
+                config.logo = LogoConfiguration(role="none")
+
+    cleanup = _selective_cleanup_recommendations()
+    unsupported_summary = [
+        "Selective AI cleanup (flyaways, blemishes, lint, dust, etc.) — AI provider not configured"
+        if not ai_cleanup_provider_configured()
+        else "Selective AI cleanup — provider configured but detection not implemented"
     ]
-    major = [
-        f"Recipe: {recipe.display_name}",
-        "Logo omitted for editorial restraint" if logo["decision"] == "omit" else "Subtle logo only if brand asset exists",
-        f"Export: {config.geometry.platform_preset or 'original'}",
-    ]
+
+    pacing_value = "unhurried" if media_type == "video" else "n/a"
+    transitions_value = "subtle fades ≤0.25s" if media_type == "video" else "none"
+
+    major: list[str] = []
+    major.append(f"Color recipe: {recipe.display_name}")
+    if logo_choice == "omit":
+        major.append("Logo omitted to protect visual hierarchy")
+    elif logo_choice == "required":
+        major.append(f"Logo placed ({config.logo.placement})")
+    else:
+        major.append(
+            "Logo optional — applied subtly" if config.logo.asset_id else "Logo optional — omitted"
+        )
+    if platform_key != "original":
+        major.append(f"Framed for {PLATFORM_EXPORT_PRESETS[platform_key]['label']}")
+    else:
+        major.append(
+            f"Restrained grade: grain {config.texture.grain_amount:.0f}, "
+            f"warmth {config.color.temperature:.0f}"
+        )
+    if revision_actions:
+        major = [*major[:2], "Revision note applied"]
+    major = major[:3]
+
+    confidence = 0.72
+    if brand_loaded and rules_loaded:
+        confidence += 0.1
+    if findings:
+        confidence += 0.05
+    if perf_findings:
+        confidence += 0.03
+    confidence = min(0.95, confidence)
+
+    score = _heuristic_review_score(config, logo_choice)
+
+    def df(
+        value: Any,
+        reason: str,
+        source: str,
+        *,
+        applied: bool = True,
+        unsupported: str | None = None,
+    ) -> DecisionField:
+        return DecisionField(
+            value=value,
+            reason=reason,
+            source=source,
+            applied=applied,
+            unsupported_reason=unsupported,
+        )
+
     decision = EditDecision(
-        selected_source_assets=DecisionField(
-            value=[str(source_file)],
-            reason="Use the render opened in Studio as the only source asset.",
-            source="render_version",
+        decision_id=f"ed_{uuid4().hex[:12]}",
+        brand_id=brand_id,
+        campaign_id=campaign_id,
+        content_piece_id=content_piece_id,
+        template_id=template_id,
+        platform=platform,
+        campaign_goal=campaign_goal,
+        piece_objective=piece_objective or campaign_goal,
+        media_type=media_type,
+        source_file=str(source_file),
+        parent_render_version_id=parent_render_version_id,
+        parent_finish_version_id=parent_finish_version_id,
+        selected_source_assets=df(
+            [Path(source_file).name],
+            "Use the current render output as the finishing source.",
+            "asset analysis",
         ),
-        clip_order=DecisionField(
-            value=[source_file.name],
-            reason="Single best edit uses the current render only.",
-            source="render_version",
+        clip_order=df(
+            [Path(source_file).name],
+            "Single-source finish; clip order unchanged from the render.",
+            "template assignment",
+            applied=media_type == "video",
         ),
-        trim_points=DecisionField(
-            value=None,
-            reason="No automatic trim was applied without explicit shot boundary data.",
-            source="production_rules",
+        trim_points=df(
+            {"start": 0.0, "end": duration_seconds},
+            "Keep the rendered duration; trim is owned by the template render.",
+            "template assignment",
             applied=False,
-            unsupported_reason="shot_boundary_data_unavailable",
+            unsupported="Trim editing is not part of Studio finish in this sprint.",
         ),
-        target_duration=DecisionField(
-            value=None,
-            reason="Keep source duration unless a template render already set duration.",
-            source="production_rules",
+        target_duration=df(
+            duration_seconds,
+            "Preserve rendered duration.",
+            "template assignment",
         ),
-        crop_strategy=DecisionField(
-            value=config.geometry.platform_preset or config.geometry.aspect_preset,
-            reason="Match the chosen platform preset while preserving the render subject.",
-            source="production_rules",
+        crop_strategy=df(
+            {
+                "platform_preset": config.geometry.platform_preset,
+                "crop_mode": config.geometry.crop_mode,
+                "aspect_preset": config.geometry.aspect_preset,
+            },
+            "Crop/fit to platform delivery from Production Rules and Brand Guide ratios.",
+            "Production Rules, Brand Guide",
         ),
-        pacing=DecisionField(
-            value=(rules.get("global_defaults") or {}).get("preferred_pacing", "unhurried"),
-            reason="Production rules prefer restrained pacing.",
-            source="production/global_defaults.json",
+        pacing=df(
+            pacing_value,
+            "Brand Guide asks for unhurried pacing; finish does not retime clips.",
+            "Brand Guide",
+            applied=False,
+            unsupported="Pacing changes require template re-render.",
         ),
-        transitions=DecisionField(
-            value=(rules.get("global_defaults") or {}).get("transition_style", "cut"),
-            reason="Use simple cuts/fades rather than decorative transitions.",
-            source="production/global_defaults.json",
+        transitions=df(
+            transitions_value,
+            "Subtle fades only; no decorative transitions.",
+            "Brand Guide, Production Rules",
+            applied=media_type == "video" and (config.export.fade_out_seconds or 0) > 0,
         ),
-        overlay_copy=DecisionField(
-            value=overlay_copy,
-            reason="No new overlay copy is invented in Studio finishing.",
-            source="content_piece",
+        overlay_copy=df(
+            overlay_copy or None,
+            "Overlay copy remains as rendered; Studio finish does not rewrite text.",
+            "template assignment",
+            applied=False,
+            unsupported="Overlay rewrite requires a revision re-render.",
         ),
-        overlay_timing=DecisionField(
-            value=_overlay_timing(rules),
-            reason="Use production timing defaults for existing overlays.",
-            source="production/animation.json",
+        overlay_timing=df(
+            None,
+            "Overlay timing owned by the template render.",
+            "template assignment",
+            applied=False,
+            unsupported="Overlay timing changes require a revision re-render.",
         ),
-        cta_copy=DecisionField(
-            value=cta_copy,
-            reason="CTA copy is preserved from the content piece.",
-            source="content_piece",
+        cta_copy=df(
+            cta_copy or None,
+            "CTA copy remains as rendered.",
+            "campaign objective",
+            applied=False,
+            unsupported="CTA rewrite requires a revision re-render.",
         ),
-        cta_timing=DecisionField(
-            value=(rules.get("animation") or {}).get("cta_appear_from_end_seconds", 2.5),
-            reason="Use production CTA timing if the render contains a CTA.",
-            source="production/animation.json",
+        cta_timing=df(
+            None,
+            "CTA timing owned by the template render.",
+            "campaign objective",
+            applied=False,
+            unsupported="CTA timing changes require a revision re-render.",
         ),
-        logo_decision=DecisionField(
-            value=logo["decision"],
-            reason=logo["reason"],
-            source="brand_guide+creative_preferences",
-            applied=True,
+        logo_decision=df(logo_choice, logo_reason, logo_source),
+        logo_placement=df(
+            {
+                "placement": config.logo.placement if logo_choice != "omit" else None,
+                "role": config.logo.role,
+                "size_mode": config.logo.size_mode,
+                "opacity": config.logo.opacity,
+            },
+            logo_reason,
+            logo_source,
+            applied=logo_choice != "omit"
+            and bool(config.logo.asset_id or config.logo.role not in {"", "none"}),
         ),
-        logo_placement=DecisionField(
-            value=logo["placement"],
-            reason=logo["reason"],
-            source="production_rules",
-            applied=logo["decision"] != "omit",
-            unsupported_reason=None if logo["decision"] != "omit" else "intentionally_omitted",
+        lighting=df(
+            config.lighting.to_dict(),
+            "Soft natural window light; slight underexposure over catalog flatness.",
+            "Brand Guide",
         ),
-        lighting=DecisionField(
-            value=config.lighting.to_dict(),
-            reason=f"Loaded from recipe {recipe.display_name}.",
-            source="color_recipe",
+        color=df(
+            config.color.to_dict() if media_type == "static" else config.video.to_dict(),
+            "Warm neutrals, restrained saturation; avoid heavy novelty grading.",
+            "Brand Guide",
         ),
-        color=DecisionField(
-            value=config.color.to_dict(),
-            reason=f"Loaded from recipe {recipe.display_name}.",
-            source="color_recipe",
+        color_recipe=df(
+            {
+                "recipe_id": recipe.recipe_id,
+                "display_name": recipe.display_name,
+                "version": recipe.version,
+            },
+            recipe_reason,
+            "Brand Guide, template assignment",
         ),
-        color_recipe=DecisionField(
-            value=recipe.recipe_id,
-            reason="Best-scoring recipe for platform, content type, and brand guidance.",
-            source="studio_recipes",
+        grain=df(
+            config.texture.grain_amount if media_type == "static" else config.video.grain,
+            "Light grain for lived-in texture; never heavy novelty film stock.",
+            "Brand Guide",
         ),
-        grain=DecisionField(
-            value=config.video.grain if media == "video" else config.texture.grain_amount,
-            reason="Use restrained recipe texture.",
-            source="color_recipe",
+        sharpening=df(
+            config.texture.sharpening if media_type == "static" else config.video.sharpen,
+            "Gentle sharpening for clarity without plastic edges.",
+            "Brand Guide",
         ),
-        sharpening=DecisionField(
-            value=config.video.sharpen if media == "video" else config.texture.sharpening,
-            reason="Preserve clarity without halo-prone sharpening.",
-            source="color_recipe",
+        vignette=df(
+            config.texture.vignette_amount if media_type == "static" else config.video.vignette,
+            "Soft vignette to hold attention without cinematic pastiche.",
+            "Brand Guide",
         ),
-        vignette=DecisionField(
-            value=config.video.vignette if media == "video" else config.texture.vignette_amount,
-            reason="Subtle vignette only when recipe calls for it.",
-            source="color_recipe",
+        audio=df(
+            {
+                "normalize": config.export.audio_normalize,
+                "production_behavior": (rules.get("exports") or {}).get("audio"),
+            },
+            export_reason,
+            "Production Rules",
+            applied=media_type == "video",
         ),
-        audio=DecisionField(
-            value=config.export.audio_normalize if media == "video" else None,
-            reason="Normalize audio on video exports; static assets have no audio.",
-            source="production/exports.json",
-        ),
-        export_settings=DecisionField(
-            value=config.export.to_dict(),
-            reason="Platform export preset applied.",
-            source="production/exports.json",
+        export_settings=df(
+            config.export.to_dict(),
+            export_reason,
+            "Production Rules, platform requirement",
         ),
         selective_cleanup=cleanup,
         rationale=(
-            "Generate one finished recommendation by combining Brand Guide, production rules, "
-            "and the best matching OBJ Studio recipe."
+            f"One best finish for {resolved_content_type} using {recipe.display_name}, "
+            f"guided by the Brand Guide and Production Rules"
+            + (f", revised from feedback: {revision_note}" if revision_note else "")
+            + "."
         ),
-        confidence=0.82 if brand_loaded and rules_loaded else 0.68,
-        unsupported_actions=unsupported,
+        confidence=confidence,
+        unsupported_actions=unsupported_summary,
         major_decisions=major,
-        creative_review_score=_creative_review_score(recipe, logo, cleanup, brand_loaded, rules_loaded),
+        creative_review_score=score,
         brand_guide_loaded=brand_loaded,
         production_rules_loaded=rules_loaded,
         brand_guide_files=brand_files,
         production_rule_files=rule_files,
+        guidance_conflict_resolutions=conflicts,
         recipe_id=recipe.recipe_id,
-        platform=platform_norm,
-        content_type=content_norm,
+        content_type=resolved_content_type,
+        revision_of=revision_of,
+        revision_note=revision_note,
     )
     return decision, config
 
 
-def parse_revision_request(note: str) -> dict[str, Any]:
-    text = (note or "").lower()
-    request: dict[str, Any] = {"raw_note": note or ""}
-    if any(phrase in text for phrase in ("too warm", "less warm", "cooler", "orange")):
-        request["temperature_delta"] = -8.0
-    if any(phrase in text for phrase in ("too cool", "too cold", "warmer")):
-        request["temperature_delta"] = request.get("temperature_delta", 0.0) + 6.0
-    if "logo" in text and any(word in text for word in ("distracting", "remove", "omit", "too big")):
-        request["logo_decision"] = "omit"
-    if any(phrase in text for phrase in ("too dark", "brighter")):
-        request["brightness_delta"] = 4.0
-    if any(phrase in text for phrase in ("too bright", "darker")):
-        request["brightness_delta"] = request.get("brightness_delta", 0.0) - 4.0
-    return request
-
-
 def apply_revision_note_to_config(
     config: FinishConfiguration,
-    revision_note: str,
+    note: str,
+    logo_choice_out: list[str] | None = None,
 ) -> tuple[FinishConfiguration, list[AppliedAction]]:
-    updated = FinishConfiguration.from_dict(config.to_dict())
-    parsed = parse_revision_request(revision_note)
+    """Translate natural-language revision feedback into supported finish changes."""
+    text = (note or "").lower()
     actions: list[AppliedAction] = []
-    temp_delta = parsed.get("temperature_delta")
-    if isinstance(temp_delta, (int, float)):
-        updated.color.temperature = float(updated.color.temperature) + float(temp_delta)
-        updated.video.temperature = float(updated.video.temperature) + float(temp_delta)
+    if not text:
+        return config, actions
+
+    if "warm" in text or "too orange" in text or "too yellow" in text:
+        before = float(config.color.temperature)
+        config.color.temperature = max(-40.0, before - 18.0)
+        config.video.temperature = max(-40.0, float(config.video.temperature) - 18.0)
+        config.color.red_balance = max(-20.0, float(config.color.red_balance) - 4.0)
         actions.append(
             AppliedAction(
-                action="revision:temperature",
-                value=temp_delta,
-                reason="Natural-language revision requested a color-temperature change.",
+                label="revision:cool_temperature",
+                action="revision:cool_temperature",
+                value={"temperature_delta": config.color.temperature - before},
+                reason="Revision note requested less warmth.",
             )
         )
-    brightness_delta = parsed.get("brightness_delta")
-    if isinstance(brightness_delta, (int, float)):
-        updated.lighting.brightness = float(updated.lighting.brightness) + float(brightness_delta)
-        updated.video.brightness = float(updated.video.brightness) + float(brightness_delta)
+
+    if "cool" in text or "too blue" in text or "cold" in text:
+        before = float(config.color.temperature)
+        config.color.temperature = min(40.0, before + 14.0)
+        config.video.temperature = min(40.0, float(config.video.temperature) + 14.0)
         actions.append(
             AppliedAction(
-                action="revision:brightness",
-                value=brightness_delta,
-                reason="Natural-language revision requested a brightness change.",
+                label="revision:warm_temperature",
+                action="revision:warm_temperature",
+                value={"temperature_delta": config.color.temperature - before},
+                reason="Revision note requested more warmth.",
             )
         )
-    if parsed.get("logo_decision") == "omit":
-        updated.logo.role = "none"
-        updated.logo.asset_id = None
-        updated.logo.timing_mode = "full"
+
+    if "logo" in text and any(
+        w in text for w in ("distract", "remove", "omit", "too big", "smaller", "less")
+    ):
+        config.logo = LogoConfiguration(role="none")
+        if logo_choice_out is not None:
+            logo_choice_out.append("omit")
         actions.append(
             AppliedAction(
+                label="revision:logo_omit",
                 action="revision:logo_omit",
-                value="omit",
-                reason="Natural-language revision said the logo was distracting or should be removed.",
+                reason="Revision note requested removing a distracting logo.",
             )
         )
-    return updated, actions
+
+    if "grain" in text and any(w in text for w in ("too much", "heavy", "less", "reduce")):
+        config.texture.grain_amount = max(0.0, float(config.texture.grain_amount) * 0.4)
+        config.video.grain = max(0.0, float(config.video.grain) * 0.4)
+        actions.append(
+            AppliedAction(
+                label="revision:reduce_grain",
+                action="revision:reduce_grain",
+                reason="Revision note requested less grain.",
+            )
+        )
+
+    if "dark" in text or "underexposed" in text or "too dim" in text or "brighter" in text:
+        if "bright" not in text or "brighter" in text or "dark" in text or "dim" in text:
+            config.lighting.exposure = min(1.0, float(config.lighting.exposure) + 0.25)
+            config.lighting.brightness = min(40.0, float(config.lighting.brightness) + 10.0)
+            config.video.brightness = min(0.4, float(config.video.brightness) + 0.1)
+            actions.append(
+                AppliedAction(
+                    label="revision:brighten",
+                    action="revision:brighten",
+                    reason="Revision note requested brighter exposure.",
+                )
+            )
+
+    if ("bright" in text and "brighter" not in text) or "overexposed" in text or "too light" in text or "darker" in text:
+        if "brighter" not in text:
+            config.lighting.exposure = max(-1.0, float(config.lighting.exposure) - 0.2)
+            config.lighting.highlights = max(-40.0, float(config.lighting.highlights) - 10.0)
+            config.lighting.brightness = max(-40.0, float(config.lighting.brightness) - 4.0)
+            config.video.brightness = max(-0.4, float(config.video.brightness) - 0.08)
+            actions.append(
+                AppliedAction(
+                    label="revision:darken",
+                    action="revision:darken",
+                    reason="Revision note requested darker exposure.",
+                )
+            )
+
+    if "contrast" in text and any(w in text for w in ("too much", "harsh", "less")):
+        config.lighting.contrast = max(-30.0, float(config.lighting.contrast) - 10.0)
+        config.video.contrast = max(0.7, float(config.video.contrast) - 0.1)
+        actions.append(
+            AppliedAction(
+                label="revision:reduce_contrast",
+                action="revision:reduce_contrast",
+                reason="Revision note requested less contrast.",
+            )
+        )
+
+    if "vignette" in text and any(w in text for w in ("too much", "heavy", "less", "remove")):
+        config.texture.vignette_amount = max(0.0, float(config.texture.vignette_amount) * 0.3)
+        config.video.vignette = max(0.0, float(config.video.vignette) * 0.3)
+        actions.append(
+            AppliedAction(
+                label="revision:reduce_vignette",
+                action="revision:reduce_vignette",
+                reason="Revision note requested less vignette.",
+            )
+        )
+
+    return config, actions
 
 
 def build_execution_report(
     decision: EditDecision,
     config: FinishConfiguration,
     *,
+    finish_ok: bool = True,
     extra_applied: list[AppliedAction] | None = None,
     warnings_acknowledged: list[str] | None = None,
 ) -> ExecutionReport:
-    applied = [
-        AppliedAction("recipe", decision.recipe_id, decision.color_recipe.reason, "studio_recipes"),
-        AppliedAction("lighting", config.lighting.to_dict(), decision.lighting.reason, "color_recipe"),
-        AppliedAction("color", config.color.to_dict(), decision.color.reason, "color_recipe"),
-        AppliedAction("export_settings", config.export.to_dict(), decision.export_settings.reason, "production_rules"),
-    ]
-    if config.logo.role not in {"", "none"} or config.logo.asset_id:
-        applied.append(AppliedAction("logo", config.logo.to_dict(), decision.logo_decision.reason, "brand_assets"))
-    else:
-        applied.append(AppliedAction("logo_omitted", "omit", decision.logo_decision.reason, "brand_guide"))
-    applied.extend(extra_applied or [])
-    not_applied = list(decision.unsupported_actions)
-    if decision.trim_points.unsupported_reason:
-        not_applied.append(
-            NotAppliedAction(
-                action="trim_points",
-                reason=decision.trim_points.reason,
-                source=decision.trim_points.source,
-                unsupported_reason=decision.trim_points.unsupported_reason,
+    applied: list[AppliedAction] = []
+    not_applied: list[NotAppliedAction] = []
+
+    if decision.color_recipe.applied:
+        recipe = decision.color_recipe.value or {}
+        name = recipe.get("display_name") if isinstance(recipe, dict) else recipe
+        applied.append(AppliedAction("Color recipe", str(name or "")))
+    if decision.lighting.applied:
+        applied.append(AppliedAction("Lighting adjustments", "exposure / contrast / shadows"))
+    if decision.color.applied:
+        applied.append(AppliedAction("Color adjustments", "temperature / saturation / fade"))
+    if decision.grain.applied and float(decision.grain.value or 0) > 0:
+        applied.append(AppliedAction("Grain", str(decision.grain.value)))
+    if decision.sharpening.applied and float(decision.sharpening.value or 0) > 0:
+        applied.append(AppliedAction("Sharpening", str(decision.sharpening.value)))
+    if decision.vignette.applied and float(decision.vignette.value or 0) > 0:
+        applied.append(AppliedAction("Vignette", str(decision.vignette.value)))
+    if decision.crop_strategy.applied:
+        applied.append(AppliedAction("Crop / resize", json.dumps(decision.crop_strategy.value)))
+    logo_val = decision.logo_decision.value
+    if logo_val == "omit":
+        applied.append(AppliedAction("Logo decision", "omitted"))
+    elif decision.logo_placement.applied:
+        applied.append(AppliedAction("Logo placement", str(decision.logo_placement.value)))
+    if decision.export_settings.applied:
+        applied.append(AppliedAction("Export settings", "Production Rules / platform"))
+    if decision.audio.applied:
+        applied.append(AppliedAction("Audio handling", str(decision.audio.value)))
+    if extra_applied:
+        applied.extend(extra_applied)
+
+    for action in decision.unsupported_actions:
+        not_applied.append(NotAppliedAction(action.split("—")[0].strip(), action))
+
+    field_labels = {
+        "trim_points": "Trim points",
+        "pacing": "Pacing",
+        "overlay_copy": "Overlay copy",
+        "overlay_timing": "Overlay timing",
+        "cta_copy": "CTA copy",
+        "cta_timing": "CTA timing",
+    }
+    for name, field in (
+        ("trim_points", decision.trim_points),
+        ("pacing", decision.pacing),
+        ("overlay_copy", decision.overlay_copy),
+        ("overlay_timing", decision.overlay_timing),
+        ("cta_copy", decision.cta_copy),
+        ("cta_timing", decision.cta_timing),
+    ):
+        if not field.applied and field.unsupported_reason:
+            not_applied.append(
+                NotAppliedAction(field_labels[name], field.unsupported_reason)
             )
-        )
+
+    # Deduplicate not_applied by label
+    seen: set[str] = set()
+    unique_na: list[NotAppliedAction] = []
+    for item in not_applied:
+        key = item.label.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_na.append(item)
+
+    if not finish_ok:
+        state = "failed_action"
+        summary = "Best Edit did not complete — finished version was not created."
+    elif unique_na and any(
+        "cleanup" in a.label.lower() or "ai provider" in a.reason.lower() for a in unique_na
+    ):
+        critical = [
+            a
+            for a in unique_na
+            if "cleanup" not in a.label.lower()
+            and "ai provider" not in a.reason.lower()
+            and "re-render" not in a.reason.lower()
+            and "trim" not in a.reason.lower()
+            and "pacing" not in a.reason.lower()
+            and "overlay" not in a.reason.lower()
+            and "cta" not in a.reason.lower()
+        ]
+        if critical:
+            state = "edit_partially_applied"
+            summary = "Best Edit partially applied — some planned changes could not run."
+        else:
+            state = "edit_fully_applied"
+            summary = (
+                "Best Edit complete for all supported deterministic finishes. "
+                "Selective AI cleanup was not available."
+            )
+    else:
+        state = "edit_fully_applied"
+        summary = "Best Edit complete — recommended finish applied."
+
     return ExecutionReport(
-        applied_actions=applied,
-        not_applied_actions=not_applied,
+        state=state,
+        applied=applied,
+        not_applied=unique_na,
+        summary=summary,
         warnings_acknowledged=list(warnings_acknowledged or []),
-        notes=["Execution report reflects actual Studio controls; unsupported AI cleanup was not faked."],
+        notes=[a.reason for a in (extra_applied or []) if a.reason],
     )
 
 
-def _normalise_platform(platform: str) -> str:
-    text = (platform or "").strip().lower().replace(" ", "_")
-    if not text:
-        return "instagram_reel"
-    if text in {"instagram", "ig", "reels", "reel"}:
-        return "instagram_reel"
-    if text == "feed":
-        return "instagram_feed"
-    return text
-
-
-def _normalise_content_type(content_type: str, text: str = "") -> str:
-    raw = f"{content_type} {text}".lower()
-    if any(word in raw for word in ("product", "flatlay", "commerce", "shop")):
-        return "product"
-    if any(word in raw for word in ("lifestyle", "ritual", "reel", "reading", "editorial")):
-        return "lifestyle"
-    return "editorial"
-
-
-def _media_type_for(path: Path) -> str:
-    return "video" if path.suffix.lower() in {".mp4", ".mov"} else "static"
-
-
-def _platform_preset(platform: str, media_type: str) -> str:
-    if platform in PLATFORM_EXPORT_PRESETS:
-        return platform
-    if "pinterest" in platform:
-        return "pinterest_pin"
-    if "email" in platform:
-        return "email_hero"
-    if "square" in platform:
-        return "instagram_square"
-    if "feed" in platform:
-        return "instagram_feed"
-    if media_type == "video":
-        return "instagram_reel"
-    return "instagram_feed"
-
-
-def _apply_platform_export(
-    config: FinishConfiguration,
-    platform: str,
-    media_type: str,
-    rules: dict[str, Any],
-) -> None:
-    preset_key = _platform_preset(platform, media_type)
-    preset = PLATFORM_EXPORT_PRESETS.get(preset_key) or {}
-    config.geometry.platform_preset = preset_key
-    if preset.get("width") and preset.get("height"):
-        config.geometry.output_width = int(preset["width"])
-        config.geometry.output_height = int(preset["height"])
-        config.geometry.fit_mode = "fill" if preset_key != "email_hero" else "fit"
-    export_rules = rules.get("exports") or {}
-    if media_type == "video":
-        config.export.format = "mp4"
-        config.export.fps = float(export_rules.get("fps") or 30)
-        config.export.codec = str(export_rules.get("codec") or config.export.codec)
-        config.export.bitrate = str(export_rules.get("bitrate") or config.export.bitrate)
-        compression = export_rules.get("compression") or {}
-        config.export.quality_preset = str(compression.get("preset") or config.export.quality_preset)
-        config.export.audio_normalize = True
-    else:
-        config.export.format = "jpg" if preset_key in {"email_hero", "instagram_feed"} else "png"
-        config.export.quality = 88 if config.export.format == "jpg" else 92
-        config.export.strip_metadata = True
-
-
-def _apply_logo_decision(config: FinishConfiguration, logo: dict[str, Any], brand_id: str) -> None:
-    if logo["decision"] == "omit":
-        config.logo.role = "none"
-        config.logo.asset_id = None
-        return
-    asset = default_asset_for_role("primary", brand_id)
-    if asset is None:
-        config.logo.role = "none"
-        config.logo.asset_id = None
-        return
-    config.logo.role = "primary"
-    config.logo.asset_id = asset.asset_id
-    config.logo.placement = str(logo.get("placement") or "bottom_right")
-    config.logo.size_mode = "subtle"
-    config.logo.opacity = min(float(asset.default_opacity), 0.8)
-    if logo.get("timing_mode") in {"full", "opening", "closing", "custom"}:
-        config.logo.timing_mode = str(logo["timing_mode"])
-
-
-def _map_static_grade_to_video(config: FinishConfiguration) -> None:
-    config.video.brightness = float(config.lighting.brightness)
-    config.video.contrast = max(0.2, 1.0 + float(config.lighting.contrast) / 100.0)
-    config.video.saturation = max(0.0, 1.0 + float(config.color.saturation) / 100.0)
-    config.video.gamma = max(0.1, float(config.lighting.gamma))
-    config.video.temperature = float(config.color.temperature)
-    config.video.fade = float(config.color.fade)
-    config.video.grain = float(config.texture.grain_amount)
-    config.video.sharpen = float(config.texture.sharpening)
-    config.video.vignette = float(config.texture.vignette_amount)
-    # The video path uses VideoAdjustments; leave static texture at recipe values
-    # for the immutable config snapshot, but processing will read video fields.
-
-
-def _cleanup_recommendations(media_type: str) -> list[CleanupRecommendation]:
-    provider = ai_cleanup_provider_configured()
-    categories = [
-        ("dust", "Remove small dust/sensor specks only if a provider can verify pixels."),
-        ("background_distraction", "Remove minor background distractions only with an AI cleanup provider."),
-    ]
-    if media_type == "video":
-        categories.append(("motion_cleanup", "Stabilized object cleanup requires a video-capable provider."))
-    return [
-        CleanupRecommendation(
-            category=category,
-            recommendation=recommendation,
-            reason="Selective cleanup cannot be truthfully generated by local Studio controls.",
-            applied=False,
-            unsupported_reason=None if provider else "ai_provider_required",
-        )
-        for category, recommendation in categories
-    ]
-
-
-def _overlay_timing(rules: dict[str, Any]) -> dict[str, Any]:
-    animation = rules.get("animation") or {}
+def parse_revision_request(note: str) -> dict[str, Any]:
+    """Structure natural-language Needs Revision feedback."""
+    text = (note or "").strip()
+    lower = text.lower()
+    intents: list[str] = []
+    if any(w in lower for w in ("warm", "orange", "yellow")):
+        intents.append("reduce_warmth")
+    if any(w in lower for w in ("cool", "blue", "cold")):
+        intents.append("increase_warmth")
+    if "logo" in lower:
+        intents.append("reduce_or_remove_logo")
+    if "grain" in lower:
+        intents.append("reduce_grain")
+    if any(w in lower for w in ("pac", "rushed", "fast", "slow")):
+        intents.append("adjust_pacing_rerender")
+    if any(w in lower for w in ("text", "copy", "explanatory", "caption")):
+        intents.append("adjust_copy_rerender")
+    if "ending" in lower:
+        intents.append("adjust_ending_rerender")
     return {
-        "hook_appear_at_seconds": animation.get("hook_appear_at_seconds", 0.25),
-        "footer_appear_at_seconds": animation.get("footer_appear_at_seconds", 0.6),
-        "text_fade_seconds": animation.get("text_fade_seconds", 0.4),
+        "raw_note": text,
+        "intents": intents,
+        "supported_in_finish": [
+            i
+            for i in intents
+            if i
+            in {
+                "reduce_warmth",
+                "increase_warmth",
+                "reduce_or_remove_logo",
+                "reduce_grain",
+            }
+        ],
+        "requires_rerender": [
+            i
+            for i in intents
+            if i.endswith("_rerender")
+        ],
     }
-
-
-def _creative_review_score(
-    recipe: ColorRecipe,
-    logo: dict[str, Any],
-    cleanup: list[CleanupRecommendation],
-    brand_loaded: bool,
-    rules_loaded: bool,
-) -> float:
-    score = 0.74
-    if brand_loaded:
-        score += 0.08
-    if rules_loaded:
-        score += 0.06
-    if logo.get("decision") == "omit":
-        score += 0.03
-    if recipe.recipe_id:
-        score += 0.04
-    if any(item.unsupported_reason for item in cleanup):
-        score -= 0.03
-    return round(max(0.0, min(score, 0.98)), 2)
