@@ -217,6 +217,15 @@ def upload_brand_asset(
     saved = get_asset(asset_id, brand_id)
     if saved is None:
         raise RuntimeError("Brand asset write could not be verified.")
+    if set_as_default and is_suitable_transparent_mark(saved):
+        try:
+            from services.active_logo import set_active_brand_mark
+
+            set_active_brand_mark(saved.asset_id, brand_id=brand_id)
+            saved = get_asset(asset_id, brand_id) or saved
+        except ValueError:
+            # Unsuitable marks stay in the library but do not become active.
+            pass
     return saved
 
 
@@ -242,8 +251,17 @@ def set_as_default(asset_id: str, brand_id: str = DEFAULT_BRAND_ID) -> BrandAsse
     asset = get_asset(asset_id, brand_id)
     if asset is None:
         raise KeyError(asset_id)
+    if not is_suitable_transparent_mark(asset):
+        raise ValueError(
+            "This mark is not suitable as the active brand logo. "
+            "A plain rectangle or flat-color badge cannot be activated."
+        )
     _clear_default_for_role(brand_id, asset.role)
-    return _update(asset_id, brand_id, is_default_for_role=True)
+    updated = _update(asset_id, brand_id, is_default_for_role=True)
+    from services.active_logo import set_active_brand_mark
+
+    set_active_brand_mark(asset_id, brand_id=brand_id)
+    return get_asset(asset_id, brand_id) or updated
 
 
 def edit_usage_rules(
@@ -348,19 +366,19 @@ def analyze_mark_pixels(path: Path) -> dict:
         "looks_like_solid_rectangle": False,
         "suitable_transparent_mark": False,
         "reason": "",
+        "width": None,
+        "height": None,
     }
     if not path.is_file():
         result["reason"] = "Logo file is missing."
         return result
     if path.suffix.lower() == ".svg":
-        result["ok"] = True
-        result["has_alpha_channel"] = True
-        result["suitable_transparent_mark"] = True
-        result["reason"] = "SVG marks are treated as transparent vector artwork."
-        return result
+        return _analyze_svg_mark(path, result)
     try:
         with Image.open(path) as img:
             img.load()
+            result["width"] = img.width
+            result["height"] = img.height
             rgba = img.convert("RGBA")
             width, height = rgba.size
             pixels = rgba.load()
@@ -447,6 +465,47 @@ def analyze_mark_pixels(path: Path) -> dict:
     return result
 
 
+def _analyze_svg_mark(path: Path, result: dict) -> dict:
+    """SVG suitability: require drawable artwork; reject plain single-rect badges."""
+    import re
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError as exc:
+        result["reason"] = f"Logo could not be read: {exc}"
+        return result
+    lowered = text.lower()
+    if "<svg" not in lowered:
+        result["reason"] = "SVG does not appear to contain a valid <svg> root."
+        return result
+    if "<script" in lowered or "javascript:" in lowered:
+        result["reason"] = "SVG contains script content and cannot be accepted."
+        return result
+
+    shapes = re.findall(r"<(path|circle|ellipse|polygon|polyline|rect)\b", lowered)
+    if not shapes:
+        result["ok"] = True
+        result["reason"] = "SVG has no drawable artwork."
+        result["suitable_transparent_mark"] = False
+        return result
+
+    if shapes == ["rect"]:
+        result["ok"] = True
+        result["looks_like_solid_rectangle"] = True
+        result["suitable_transparent_mark"] = False
+        result["reason"] = (
+            "Logo looks like a solid-color rectangular badge rather than a "
+            "transparent wordmark or monogram."
+        )
+        return result
+
+    result["ok"] = True
+    result["has_alpha_channel"] = True
+    result["suitable_transparent_mark"] = True
+    result["reason"] = "SVG marks with drawable artwork are treated as transparent vector artwork."
+    return result
+
+
 def is_suitable_transparent_mark(asset: BrandAssetRecord) -> bool:
     if asset is None:
         return False
@@ -458,13 +517,20 @@ def is_suitable_transparent_mark(asset: BrandAssetRecord) -> bool:
     return bool(analysis.get("suitable_transparent_mark"))
 
 
-def select_best_logo_asset(
+def get_active_brand_mark_id(brand_id: str = DEFAULT_BRAND_ID) -> str | None:
+    raw = _load_raw(brand_id)
+    value = raw.get("active_brand_mark_id")
+    return str(value) if value else None
+
+
+def select_suitable_logo_candidates(
     brand_id: str = DEFAULT_BRAND_ID,
     *,
     preferred_roles: tuple[str, ...] | None = None,
-) -> BrandAssetRecord | None:
-    """Pick the best transparent mark, preferring wordmark / monogram / light / dark."""
+) -> list[BrandAssetRecord]:
+    """Ordered suitable marks, ignoring the active pointer (used for bootstrap / fallback)."""
     roles = preferred_roles or PREFERRED_MARK_ROLES
+    ordered: list[BrandAssetRecord] = []
     seen: set[str] = set()
     for role in roles:
         asset = default_asset_for_role(role, brand_id)
@@ -472,14 +538,38 @@ def select_best_logo_asset(
             continue
         seen.add(asset.asset_id)
         if is_suitable_transparent_mark(asset):
-            return asset
-    # Fall through: any active asset that is suitable, regardless of role order.
+            ordered.append(asset)
     for asset in list_assets(brand_id):
         if asset.asset_id in seen:
             continue
         if is_suitable_transparent_mark(asset):
+            ordered.append(asset)
+            seen.add(asset.asset_id)
+    return ordered
+
+
+def select_best_logo_asset(
+    brand_id: str = DEFAULT_BRAND_ID,
+    *,
+    preferred_roles: tuple[str, ...] | None = None,
+) -> BrandAssetRecord | None:
+    """Pick the active Settings mark when suitable, else the best transparent candidate.
+
+    Never returns the jade rectangle placeholder or other unsuitable badges.
+    """
+    active_id = get_active_brand_mark_id(brand_id)
+    if active_id:
+        asset = get_asset(active_id, brand_id)
+        if (
+            asset is not None
+            and asset.active
+            and not asset.archived
+            and is_suitable_transparent_mark(asset)
+        ):
             return asset
-    return None
+
+    candidates = select_suitable_logo_candidates(brand_id, preferred_roles=preferred_roles)
+    return candidates[0] if candidates else None
 
 
 def auto_logo_safe_margin_px(canvas_width: int | None = None) -> float:

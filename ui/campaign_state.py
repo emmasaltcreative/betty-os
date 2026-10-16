@@ -34,8 +34,20 @@ SUPPORT_DOC_SUFFIXES = {".md", ".txt"}
 METADATA_NAMES = {"versions.json", "migration_marker.json", "approvals.json"}
 
 # Folders inside a campaign that are bookkeeping, not render output.
-NON_RENDER_ENTRIES = {"approvals.json", "approval_summary.md", "migration_report.json",
-                      "render_queue_summary.md", "exports", "studio"}
+NON_RENDER_ENTRIES = {
+    "approvals.json",
+    "approval_summary.md",
+    "migration_report.json",
+    "render_queue_summary.md",
+    "exports",
+    "studio",
+    "document_previews",
+    "revision_jobs",
+    "production_briefs",
+    "BettyOS Data",
+    "betty_data",
+    ".betty_internal",
+}
 
 
 # --- Render versions --------------------------------------------------------
@@ -243,7 +255,7 @@ def list_campaigns() -> list[CampaignSummary]:
         summaries.append(
             CampaignSummary(
                 path=path,
-                name=_display_name_from_folder(path.name),
+                name=campaign_display_name(path),
                 created_at=_fmt_stamp(datetime.fromtimestamp(path.stat().st_ctime)),
                 updated_at=_fmt_stamp(_folder_stamp(path)),
             )
@@ -265,7 +277,7 @@ def list_archived_campaigns() -> list[CampaignSummary]:
     return [
         CampaignSummary(
             path=path,
-            name=_display_name_from_folder(path.name),
+            name=campaign_display_name(path),
             created_at=_fmt_stamp(datetime.fromtimestamp(path.stat().st_ctime)),
             updated_at=_fmt_stamp(_folder_stamp(path)),
         )
@@ -275,7 +287,17 @@ def list_archived_campaigns() -> list[CampaignSummary]:
 
 
 def campaign_display_name(campaign_dir: Path | None) -> str:
-    return _display_name_from_folder(campaign_dir.name) if campaign_dir else "No campaign"
+    if campaign_dir is None:
+        return "No campaign"
+    try:
+        from src.campaign_meta import load_campaign_meta
+
+        meta = load_campaign_meta(campaign_dir)
+        if meta and meta.display_title.strip():
+            return meta.display_title.strip()
+    except Exception:
+        pass
+    return _display_name_from_folder(campaign_dir.name)
 
 
 def list_content_packages() -> list[Path]:
@@ -315,11 +337,18 @@ def _render_folders(campaign_dir: Path) -> list[tuple[str, Path]]:
     Migration copies `ritual_reel` to `cinematic_multi_clip_reel` rather than
     moving it, so both folders hold the same files. The legacy folder must stay
     on disk — revision execution reads it — but it is not shown twice.
+
+    Internal QA / smoke folders are excluded from product discovery.
     """
+    from src.asset_visibility import NON_DELIVERABLE_DIR_NAMES, is_internal_asset_folder
+
     present = {p.name for p in campaign_dir.iterdir() if p.is_dir()}
     pairs: list[tuple[str, Path]] = []
     for name in sorted(present):
-        if name in NON_RENDER_ENTRIES or name.startswith("."):
+        if name in NON_RENDER_ENTRIES or name in NON_DELIVERABLE_DIR_NAMES or name.startswith("."):
+            continue
+        folder = campaign_dir / name
+        if is_internal_asset_folder(folder):
             continue
         template_id = canonical_template_for_folder(name)
         legacy_twin = TEMPLATE_TO_LEGACY_FOLDER.get(template_id)
@@ -332,7 +361,7 @@ def _render_folders(campaign_dir: Path) -> list[tuple[str, Path]]:
             if not _has_media(canonical_dir) and _has_media(campaign_dir / legacy_twin):
                 pairs.append((template_id, campaign_dir / legacy_twin))
                 continue
-        pairs.append((template_id, campaign_dir / name))
+        pairs.append((template_id, folder))
     return pairs
 
 
@@ -632,17 +661,34 @@ def _finish_sort_key(record: "FinishRecord") -> tuple[int, str]:  # noqa: F821
     return (num, record.updated_at or "")
 
 
-def active_finish_for_decide(version: RenderVersion) -> "FinishRecord | None":  # noqa: F821
-    """Finish Decide should show: newest ready_for_review, else newest finish.
+def active_finish_for_decide(
+    version: RenderVersion,
+    *,
+    preferred_finish_id: str | None = None,
+) -> "FinishRecord | None":  # noqa: F821
+    """Finish Decide should show: preferred revision, else newest review candidate.
 
-    Older ready_for_review finishes (e.g. jade-badge v001) must not win over a
-    newer omit finish that was also sent to review.
+    Prefer an explicit session-focused finish (new revision). Otherwise prefer the
+    newest ready_for_review finish — so a fresh revision candidate wins over an
+    older approved finish still marked ready_for_review. Package export still
+    uses approved_finish_records_for_version, not this helper.
     """
     finishes = finish_records_for_version(version)
     if not finishes:
         return None
+    if preferred_finish_id:
+        for record in finishes:
+            if record.finish_version_id == preferred_finish_id:
+                return record
     ready = [f for f in finishes if f.status == "ready_for_review"]
-    pool = ready if ready else finishes
+    # Prefer unfinished review candidates over already-approved finishes when both
+    # are ready_for_review, so Decide shows the revision awaiting approval.
+    awaiting = [
+        f
+        for f in ready
+        if f.approval_status in {"awaiting_review", "needs_revision", "not_submitted"}
+    ]
+    pool = awaiting or ready or finishes
     return max(pool, key=_finish_sort_key)
 
 
@@ -1106,10 +1152,11 @@ def count_exports(campaign_dir: Path | None) -> int:
 # --- Public entry point -----------------------------------------------------
 
 def build_campaign_state(campaign_dir: Path | None) -> CampaignState:
+    from src.asset_visibility import filter_user_facing_versions
     from ui.data_access import api_key_configured, ffmpeg_available
 
     package_path = package_for_campaign(campaign_dir)
-    versions = discover_render_versions(campaign_dir)
+    versions = filter_user_facing_versions(discover_render_versions(campaign_dir))
     if campaign_dir is not None and versions:
         apply_approvals(campaign_dir, versions)
         apply_version_manifests(versions)
@@ -1124,10 +1171,23 @@ def build_campaign_state(campaign_dir: Path | None) -> CampaignState:
     review_current = _review_is_current(versions)
     export_count = count_exports(campaign_dir)
 
+    resolved_goal = goal or "No goal recorded"
+    if campaign_dir is not None:
+        try:
+            from src.campaign_meta import ensure_campaign_meta
+
+            meta = ensure_campaign_meta(
+                campaign_dir, objective=resolved_goal, pieces=pieces
+            )
+            if meta.objective and resolved_goal == "No goal recorded":
+                resolved_goal = meta.objective
+        except Exception:
+            pass
+
     state = CampaignState(
         path=campaign_dir,
         name=campaign_display_name(campaign_dir),
-        goal=goal or "No goal recorded",
+        goal=resolved_goal,
         package_path=package_path,
         package_name=package_path.name if package_path else "",
         platforms=sorted({p.record.platform for p in pieces if p.record.platform}),

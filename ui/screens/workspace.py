@@ -15,17 +15,17 @@ from ui import nav
 from ui.campaign_state import CampaignState, active_finish_for_decide, finish_records_for_version
 from ui.components import (
     blocked_state,
+    compact_media_preview,
     empty_state,
+    focus_bar,
     key_values,
     media_preview,
     note,
     page_header,
-    progress_rail,
     quiet,
     report,
     saved_note,
     section,
-    show_badges,
 )
 from ui.continue_campaign import (
     WORKSPACE_STAGES,
@@ -103,13 +103,16 @@ def render(state: CampaignState) -> None:
 
     default_label = KEY_TO_LABEL.get(continuation.current_stage, "Plan")
     _sync_stage_before_widget(default_label)
-    selected = nav.step_selector("Stage", STAGE_OPTIONS, key=STAGE_WIDGET_KEY)
-    # Reflect the widget choice into the internal workflow key only — never write
-    # back to STAGE_WIDGET_KEY after the selector exists.
-    if selected in STAGE_OPTIONS:
+    # Stage is driven by deep links / continuation — not a second permanent menu.
+    selected = st.session_state.get(STAGE_WIDGET_KEY) or st.session_state.get(
+        STAGE_STATE_KEY, default_label
+    )
+    if selected not in STAGE_OPTIONS:
+        selected = default_label
         st.session_state[STAGE_STATE_KEY] = selected
+        st.session_state[STAGE_WIDGET_KEY] = selected
     else:
-        selected = st.session_state.get(STAGE_STATE_KEY, default_label)
+        st.session_state[STAGE_STATE_KEY] = selected
 
     stage_key = STAGE_KEYS.get(selected, continuation.current_stage)
     nav.persist_workspace_context(state.path, stage=stage_key)
@@ -127,7 +130,8 @@ def render(state: CampaignState) -> None:
     else:
         _stage_deliver(state, continuation)
 
-    _journal_panel(state)
+    if not st.session_state.get("betty_focus_mode", True):
+        _journal_panel(state)
     _advanced_panel(state, stage_key)
 
 
@@ -137,20 +141,42 @@ def _header(state: CampaignState, continuation) -> None:
         continuation.founder_stage_label,
         campaign_status(state.stage).tone,
     )
-    page_header(state.name, state.goal, badges=[stage])
-    progress_rail(state.steps)
-
-    cols = st.columns([3, 1, 1], gap="medium", vertical_alignment="center")
+    # Compact campaign chrome — workflow stage is contextual, not a second app menu.
+    focus_bar(
+        campaign=state.name,
+        step=KEY_TO_LABEL.get(continuation.current_stage, continuation.founder_stage_label),
+        estimate=continuation.estimated_effort,
+        action=continuation.primary_action.label,
+    )
+    cols = st.columns([1, 1, 1], gap="small")
     with cols[0]:
-        quiet(f"Next: {continuation.primary_action.label}")
+        if st.button("Campaign Overview", use_container_width=True, key="ws_overview"):
+            nav.clear_contextual_page()
+            st.session_state["campaign_shell_tab"] = "Overview"
+            nav.goto("Campaigns")
     with cols[1]:
-        if st.button("Return to Today", use_container_width=True, key="ws_today"):
+        if st.button("Today", use_container_width=True, key="ws_today"):
             nav.clear_contextual_page()
             nav.goto("Today")
     with cols[2]:
-        if st.button("Campaign details", use_container_width=True, key="ws_campaigns"):
-            nav.clear_contextual_page()
-            nav.goto("Campaigns")
+        if st.button("Timeline", use_container_width=True, key="ws_timeline"):
+            st.session_state["ws_show_timeline"] = not st.session_state.get(
+                "ws_show_timeline", False
+            )
+            st.rerun()
+    if st.session_state.get("ws_show_timeline"):
+        from ui.timeline import render_timeline
+
+        with st.container(border=True):
+            render_timeline(state)
+    # Compact stage progress — not a competing navigation row.
+    quiet(
+        " · ".join(
+            f"{'●' if key == continuation.current_stage else '○'} {label}"
+            for key, label in WORKSPACE_STAGES
+        )
+    )
+    _ = stage  # badge reserved for advanced/full view if re-enabled
 
 
 def _resolve_stage_label(stage_key: str) -> str:
@@ -160,14 +186,23 @@ def _resolve_stage_label(stage_key: str) -> str:
 # --- Brief ------------------------------------------------------------------
 
 def _stage_brief(state: CampaignState, continuation) -> None:
+    from src.platforms import PLATFORM_OPTIONS, multiselect_platform_defaults
+    from ui.intelligence_ui import render_brief_intelligence_inputs
+
     section("What are we trying to accomplish?")
     quiet(continuation.message)
     with st.container(border=True):
         goal = st.text_area("Campaign goal", value=state.goal if state.goal != "No goal recorded" else "", height=100)
+        platform_defaults = multiselect_platform_defaults(
+            state.platforms,
+            st.session_state.get("campaign_platforms"),
+            fallback=("Instagram", "Pinterest"),
+            source="workspace.brief",
+        )
         platforms = st.multiselect(
             "Platforms",
-            ["Instagram", "Pinterest", "TikTok", "Email", "Waitlist", "YouTube Shorts"],
-            default=state.platforms or st.session_state.get("campaign_platforms", ["Instagram", "Pinterest"]),
+            list(PLATFORM_OPTIONS),
+            default=platform_defaults,
         )
         if st.button("Save Goal", type="primary", key="ws_save_goal"):
             st.session_state["campaign_goal"] = goal.strip()
@@ -185,11 +220,36 @@ def _stage_brief(state: CampaignState, continuation) -> None:
             nav.clear_contextual_page()
             nav.goto("Campaigns")
 
+    if state.path is not None:
+        default_goal = ""
+        if state.goal and state.goal != "No goal recorded":
+            default_goal = state.goal
+        render_brief_intelligence_inputs(state.path, default_goal=default_goal)
+
 
 # --- Plan -------------------------------------------------------------------
 
 def _stage_plan(state: CampaignState, continuation) -> None:
+    from ui.intelligence_ui import (
+        accept_plan_with_brief,
+        render_plan_intelligence,
+        render_production_brief_success,
+    )
+
+    # Accepted plan success state: Production Brief (not a permanent top-level tab)
+    if state.path is not None and (
+        st.session_state.get("ws_brief_ready") or _has_production_brief(state.path)
+    ):
+        render_production_brief_success(state.path)
+        with st.expander("View content plan", expanded=False):
+            _render_content_plan_card(state, continuation)
+        return
+
     section("Recommended direction")
+    if state.path is not None:
+        render_plan_intelligence(state.path, piece_count=max(1, len(state.pieces) or 5))
+        st.write("")
+
     if not state.pieces:
         empty_state(
             "No campaign content yet",
@@ -200,7 +260,24 @@ def _stage_plan(state: CampaignState, continuation) -> None:
             nav.goto("Campaigns")
         return
 
+    _render_content_plan_card(state, continuation, accept_with_brief=True)
+
+
+def _has_production_brief(campaign_dir: Path) -> bool:
+    from src.campaign_intelligence import newest_brief, resolve_brief_file
+
+    record = newest_brief(campaign_dir)
+    if record is None:
+        return False
+    return resolve_brief_file(campaign_dir, record) is not None
+
+
+def _render_content_plan_card(state: CampaignState, continuation, *, accept_with_brief: bool = False) -> None:
+    from ui.intelligence_ui import accept_plan_with_brief
+
     piece = _focus_piece(state, continuation)
+    if piece is None:
+        return
     record = piece.record
     with st.container(border=True):
         st.markdown(f'<div class="betty-section">{record.title}</div>', unsafe_allow_html=True)
@@ -222,6 +299,38 @@ def _stage_plan(state: CampaignState, continuation) -> None:
 
         st.write("")
         if st.button("Accept Plan", type="primary", key="ws_accept_plan"):
+            if accept_with_brief and state.path is not None:
+                from src.campaign_intelligence import load_intelligence, plan_campaign_intelligence
+                from src.campaign_intelligence.models import CampaignInputs
+
+                if load_intelligence(state.path) is None:
+                    from src.platforms import multiselect_platform_defaults
+
+                    plan_campaign_intelligence(
+                        campaign_dir=state.path,
+                        campaign_name=state.name,
+                        inputs=CampaignInputs(
+                            business_objective=st.session_state.get(
+                                "campaign_goal",
+                                state.goal
+                                if state.goal != "No goal recorded"
+                                else "grow the waitlist",
+                            ),
+                            preferred_platforms=multiselect_platform_defaults(
+                                state.platforms,
+                                st.session_state.get("campaign_platforms"),
+                                fallback=("Instagram", "Pinterest"),
+                                source="workspace.accept_plan",
+                            ),
+                            filming_minutes_available=60,
+                        ),
+                        piece_count=max(1, len(state.pieces)),
+                        persist=True,
+                    )
+                accept_plan_with_brief(state.path)
+                st.session_state["betty_flash"] = "Plan accepted. Production Brief generated."
+                st.rerun()
+                return
             if piece.status_key == "missing_inputs":
                 nav.goto_workspace("capture", piece_id=record.piece_id)
             elif piece.status_key == "ready_to_render" or piece.versions:
@@ -314,6 +423,16 @@ def _stage_capture(state: CampaignState, continuation) -> None:
             if st.button("Adapt plan to available footage", key="ws_adapt"):
                 nav.goto_workspace("plan", piece_id=piece.record.piece_id)
 
+    if state.path is not None:
+        from ui.intelligence_ui import render_capture_reestimate
+        from src.campaign_intelligence import load_intelligence
+
+        planned = len(required)
+        intel = load_intelligence(state.path)
+        if intel and intel.production_session:
+            planned = len([s for s in intel.production_session.shots if s.must_have]) or planned
+        render_capture_reestimate(state.path, planned)
+
 
 def _save_uploads(uploaded) -> list[Path]:
     from src.common import ASSETS_MEDIA_DIR
@@ -343,6 +462,12 @@ def _stage_create(state: CampaignState, continuation) -> None:
     piece = _focus_piece(state, continuation)
     version = _focus_version(state, continuation)
 
+    job = st.session_state.get("betty_create_job")
+    if isinstance(job, dict) and job.get("status") == "running":
+        quiet("Creating Asset…")
+        st.button("Creating Asset…", type="primary", key="ws_create_best", disabled=True)
+        return
+
     if continuation.current_state == "processing":
         quiet("I’m selecting, editing, and finishing the strongest version.")
         return
@@ -360,7 +485,8 @@ def _stage_create(state: CampaignState, continuation) -> None:
         )
         quiet("I have everything I need." if ready else continuation.message)
         st.write("")
-        if st.button("Create Best Draft", type="primary", key="ws_create_best"):
+        create_label = "Create Next Asset" if piece is not None else "Create Best Draft"
+        if st.button(create_label, type="primary", key="ws_create_best"):
             _run_create_best(state, piece, version)
 
         # Logo missing resume hook
@@ -383,8 +509,21 @@ def _stage_create(state: CampaignState, continuation) -> None:
 
 
 def _run_create_best(state: CampaignState, piece, version) -> None:
+    from uuid import uuid4
+
     from studio.service import generate_best_edit
     from studio.versions import render_version_id
+    from ui.campaign_state import build_campaign_state
+
+    existing = st.session_state.get("betty_create_job")
+    if isinstance(existing, dict) and existing.get("status") == "running":
+        return
+    job_id = uuid4().hex
+    st.session_state["betty_create_job"] = {
+        "id": job_id,
+        "status": "running",
+        "piece_id": piece.record.piece_id if piece else None,
+    }
 
     target_piece = piece
     if target_piece is None and version is not None:
@@ -396,11 +535,21 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
                 target_piece = p
                 break
 
-    with st.status("Creating your draft…", expanded=True) as status:
+    with st.status("Creating Asset…", expanded=True) as status:
         quiet(
             "I’m selecting the strongest footage, applying the brand treatment, "
             "and reviewing the final sequence."
         )
+
+        def _fail(message: str, *, detail: str | None = None) -> None:
+            st.session_state["betty_create_job"] = {
+                "id": job_id,
+                "status": "failed",
+                "error": message,
+            }
+            status.update(label=message, state="error")
+            if detail:
+                blocked_state("Creation stopped", detail)
 
         render_version = version
         if render_version is None and target_piece is not None and target_piece.can_render:
@@ -417,11 +566,21 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
             )
             report(result)
             if not result.ok:
-                status.update(label="Could not create the base draft.", state="error")
+                _fail("Could not create the base draft.")
                 return
-            st.session_state["betty_flash"] = "Base draft created. Continuing finishing…"
-            nav.goto_workspace("create", piece_id=target_piece.record.piece_id)
-            return
+            # Same click continues into finishing — no second button press.
+            status.write("Base draft ready. Continuing finishing…")
+            refreshed = build_campaign_state(state.path)
+            target_piece = next(
+                (
+                    p
+                    for p in refreshed.pieces
+                    if p.record.piece_id == target_piece.record.piece_id
+                ),
+                target_piece,
+            )
+            render_version = target_piece.latest_version if target_piece else None
+            state = refreshed
 
         if render_version is None:
             if target_piece and target_piece.latest_version:
@@ -429,16 +588,15 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
             elif state.versions:
                 render_version = state.versions[-1]
             else:
-                status.update(label="Nothing is ready to finish yet.", state="error")
-                blocked_state(
-                    "I need source media or a draft first",
-                    "Add footage in Capture, or confirm the plan includes a supported format.",
+                _fail(
+                    "Nothing is ready to finish yet.",
+                    detail="Add footage in Capture, or confirm the plan includes a supported format.",
                 )
                 return
 
         source = render_version.primary_path
         if source is None or not source.is_file():
-            status.update(label="The draft file is missing.", state="error")
+            _fail("The draft file is missing.")
             return
 
         status.write("Finishing with Brand Guide and Production Rules…")
@@ -463,15 +621,16 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
                 progress=progress,
             )
         except Exception as exc:  # noqa: BLE001 — surface plainly
-            status.update(label="I could not finish this draft.", state="error")
-            blocked_state("Creation stopped", str(exc).splitlines()[-1])
+            _fail("I could not finish this draft.", detail=str(exc).splitlines()[-1])
             with st.expander("View Technical Details", expanded=False):
                 st.code(str(exc))
             return
 
         if not outcome.get("ok"):
-            status.update(label="I could not finish this draft.", state="error")
-            blocked_state("Creation stopped", str(outcome.get("error") or "Unknown error"))
+            _fail(
+                "I could not finish this draft.",
+                detail=str(outcome.get("error") or "Unknown error"),
+            )
             return
 
         record = outcome.get("record")
@@ -483,9 +642,51 @@ def _run_create_best(state: CampaignState, piece, version) -> None:
             send_to_review(render_version.folder, record.finish_version_id)
 
         status.update(label=f"Draft ready for {ctx_title}.", state="complete")
+        st.session_state["betty_create_job"] = {
+            "id": job_id,
+            "status": "complete",
+            "version_key": render_version.key,
+        }
         st.session_state["betty_flash"] = "I finished the strongest version."
         st.session_state["studio_pending_version_key"] = render_version.key
         nav.goto_workspace("decide", version_key=render_version.key)
+
+
+def _after_approve(state: CampaignState, version, title: str) -> None:
+    """Explain campaign progress and recommend the next asset — do not surprise-jump."""
+    from src.campaign_meta import (
+        coverage_summary,
+        ensure_campaign_meta,
+        next_recommended_deliverable,
+        why_next_matters,
+    )
+    from ui.campaign_state import build_campaign_state
+
+    refreshed = build_campaign_state(state.path)
+    meta = ensure_campaign_meta(
+        refreshed.path, objective=refreshed.goal, pieces=refreshed.pieces
+    )
+    coverage = coverage_summary(meta)
+    nxt = next_recommended_deliverable(meta)
+    flash = (
+        f"{title} approved.\n\n"
+        f"Campaign progress: {coverage['progress_label']}."
+    )
+    if nxt is not None:
+        flash += f"\n\nRecommended next: {why_next_matters(nxt)}"
+        st.session_state["betty_flash"] = flash
+        if nxt.status == "in_review":
+            nav.goto_workspace("decide", piece_id=nxt.piece_id)
+        elif nxt.status == "missing_footage":
+            nav.goto_workspace("capture", piece_id=nxt.piece_id)
+        else:
+            nav.goto_workspace("create", piece_id=nxt.piece_id)
+        return
+    flash += "\n\nAll required deliverables are ready. Open Publishing to deliver the campaign."
+    st.session_state["betty_flash"] = flash
+    nav.clear_contextual_page()
+    st.session_state["campaign_shell_tab"] = "Publishing"
+    nav.goto("Campaigns")
 
 
 def _platform_for(state: CampaignState, version) -> str:
@@ -501,20 +702,68 @@ def _platform_for(state: CampaignState, version) -> str:
 
 # --- Decide -----------------------------------------------------------------
 
+REVISION_SHORTCUTS = (
+    "Make the copy more on brand",
+    "Make it less generic",
+    "Make it quieter and more editorial",
+    "Improve the opening hook",
+    "Adjust the pacing",
+    "Change the footage",
+    "Improve typography",
+    "Other",
+)
+
+
 def _stage_decide(state: CampaignState, continuation) -> None:
-    section("Decide")
+    from services.decide_revision import (
+        active_job_for_version,
+        load_job,
+        recover_stale_jobs,
+    )
+
+    if state.path:
+        recover_stale_jobs(state.path)
+
     version = _focus_version(state, continuation)
+    if version is not None and not _is_user_facing_version(version):
+        version = None
     if version is None:
-        # Fall back to first awaiting / needs revision / latest
-        awaiting = [v for v in state.versions if v.is_latest and v.approval_status == "awaiting_review"]
-        needs = [v for v in state.versions if v.is_latest and v.approval_status == "needs_revision"]
-        version = (awaiting or needs or state.versions or [None])[-1] if state.versions else None
+        awaiting = [
+            v
+            for v in state.versions
+            if v.is_latest
+            and v.approval_status == "awaiting_review"
+            and _is_user_facing_version(v)
+        ]
+        needs = [
+            v
+            for v in state.versions
+            if v.is_latest
+            and v.approval_status == "needs_revision"
+            and _is_user_facing_version(v)
+        ]
+        # Prefer revision-ready / pending review over already-approved.
         if awaiting:
             version = awaiting[0]
         elif needs:
             version = needs[0]
-        elif state.versions:
-            version = max(state.versions, key=lambda v: (v.is_latest, v.version))
+        else:
+            pending = [
+                v
+                for v in state.versions
+                if v.is_latest
+                and v.approval_status not in {"approved", "rejected"}
+                and _is_user_facing_version(v)
+            ]
+            if pending:
+                version = max(pending, key=lambda v: v.version)
+            else:
+                user_versions = [v for v in state.versions if _is_user_facing_version(v)]
+                version = (
+                    max(user_versions, key=lambda v: (v.is_latest, v.version))
+                    if user_versions
+                    else None
+                )
 
     if version is None:
         empty_state("No draft to review yet", "Create a best draft first.")
@@ -522,112 +771,493 @@ def _stage_decide(state: CampaignState, continuation) -> None:
             nav.goto_workspace("create")
         return
 
-    active = active_finish_for_decide(version)
+    preferred_finish = st.session_state.get("ws_decide_focus_finish_id")
+    job = None
+    if state.path:
+        job_id = st.session_state.get("ws_revision_job_id")
+        if job_id:
+            job = load_job(state.path, str(job_id))
+        if job is None:
+            job = active_job_for_version(state.path, version.key)
+        # After a copy revision, prefer the new render version when present.
+        if job and job.new_version_key and job.status == "ready":
+            for candidate in state.versions:
+                if candidate.key == job.new_version_key:
+                    version = candidate
+                    break
+        if job and job.new_finish_version_id and job.status == "ready":
+            preferred_finish = job.new_finish_version_id
+            st.session_state["ws_decide_focus_finish_id"] = preferred_finish
 
+    active = active_finish_for_decide(version, preferred_finish_id=preferred_finish)
     title = state.piece_title(version) or version.display_name
     platform = _platform_for(state, version)
+    decision_lines = _decision_lines(active)
+    confidence = _confidence_for(active)
 
-    with st.container(border=True):
-        st.markdown(f'<div class="betty-section">Draft ready</div>', unsafe_allow_html=True)
-        quiet(f"{title} · {platform}")
+    from ui.decide_media import resolve_decide_media
 
-        preview = None
-        if active is not None:
-            from studio.versions import resolve_finish_output, resolve_finish_preview
+    decide_media = resolve_decide_media(version, active)
 
-            preview = resolve_finish_preview(version.folder, active) or resolve_finish_output(
-                version.folder, active
-            )
-            if preview is None:
-                from studio.paths import finish_version_dir
+    brand_report = _brand_check_for_decide(version, active, decide_media, job)
+    revision_ready = bool(job and job.status == "ready" and job.new_finish_version_id)
 
-                folder = finish_version_dir(version.folder, active.finish_version_id)
-                out_dir = folder / "outputs"
-                if out_dir.is_dir():
-                    candidates = sorted(out_dir.iterdir())
-                    media = [
-                        p
-                        for p in candidates
-                        if p.suffix.lower() in {".mp4", ".mov", ".png", ".jpg", ".jpeg"}
-                        and p.name.startswith("finished")
-                    ]
-                    if not media:
-                        media = [
-                            p
-                            for p in candidates
-                            if p.suffix.lower() in {".mp4", ".mov", ".png", ".jpg", ".jpeg"}
-                        ]
-                    preview = media[0] if media else None
-        if preview is None and version.primary_path:
-            preview = version.primary_path
-        if preview and preview.is_file():
-            _show_preview_path(preview)
-        else:
-            media_preview(version)
-
-        decision_lines = _decision_lines(active)
-        if decision_lines:
-            st.write("")
-            section("Creative Director note")
-            for line in decision_lines[:3]:
-                st.markdown(f"- {line}")
-
-        st.write("")
-        if st.button("Approve", type="primary", key="ws_approve"):
-            result = save_version_decision(
-                state.path, version=version, status="approved", note=""
-            )
-            report(result)
-            if result.ok:
-                st.session_state["betty_flash"] = "Approved. Your publishing package is ready."
-                nav.goto_workspace("deliver")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Needs Revision", key="ws_needs_rev"):
-                st.session_state["ws_show_revision"] = True
-                st.rerun()
-        with c2:
-            if st.button("Reject", key="ws_reject"):
-                result = save_version_decision(
-                    state.path, version=version, status="rejected", note=""
+    left, right = st.columns([1.05, 1.2], gap="medium")
+    with left:
+        with st.container(border=True):
+            if revision_ready:
+                st.markdown(
+                    '<div class="betty-section">Revision ready</div>',
+                    unsafe_allow_html=True,
                 )
-                report(result)
-                if result.ok:
-                    st.session_state["betty_flash"] = "Rejected. This version will not be delivered."
+                quiet(f"{title} · {platform}")
+                if job and job.feedback:
+                    quiet(f"Requested change: “{job.feedback}”")
+                if job and job.what_changed:
+                    quiet("What changed:")
+                    for line in job.what_changed:
+                        st.markdown(f"- {line}")
+            else:
+                quiet(f"{title} · {platform}")
+                if active and active.approval_status == "approved":
+                    quiet("Approved")
+            if decide_media.blocking_message:
+                blocked_state(
+                    "Video output is missing"
+                    if decide_media.expects_video
+                    else "Preview unavailable",
+                    decide_media.blocking_message,
+                )
+            elif decide_media.canonical is not None:
+                compact_media_preview(
+                    decide_media.canonical,
+                    key=f"decide_{version.key}_{getattr(active, 'finish_version_id', 'none')}",
+                    poster=decide_media.poster,
+                )
+            else:
+                media_preview(version, key_prefix="decide_")
+
+            if revision_ready and job and job.plan:
+                st.write("")
+                quiet("Original")
+                quiet(f"“{job.plan.original_copy}”")
+                quiet("Revised")
+                quiet(f"“{job.plan.proposed_copy}”")
+                if job.plan.why_changed:
+                    quiet(f"Why it changed · {job.plan.why_changed}")
+
+            # Previous version access
+            prior = _prior_approved_finish(version, active)
+            if prior is not None and active and prior.finish_version_id != active.finish_version_id:
+                if st.button("View previous approved version", key="ws_view_prior_finish"):
+                    st.session_state["ws_decide_focus_finish_id"] = prior.finish_version_id
                     st.rerun()
 
-    if st.session_state.get("ws_show_revision"):
+    with right:
         with st.container(border=True):
-            section("What should change?")
-            quiet("Describe the problem in plain language.")
-            feedback = st.text_area(
-                "Feedback",
-                placeholder="The pacing feels rushed. The CTA feels disconnected.",
-                key="ws_revision_text",
-                height=100,
+            st.markdown(
+                '<div class="betty-section">Creative Director</div>',
+                unsafe_allow_html=True,
             )
-            if st.button("Apply Revision", type="primary", key="ws_apply_rev"):
-                if not feedback.strip():
-                    note("Add a short note so I know what to change.")
+            if decision_lines:
+                quiet("Why this version won")
+                for line in decision_lines[:3]:
+                    st.markdown(f"- {line}")
+            else:
+                quiet("This is the strongest draft for the campaign direction.")
+            if confidence:
+                quiet(f"Confidence · {confidence}")
+
+            _render_brand_check(brand_report)
+
+            st.write("")
+            is_approved = (
+                version.approval_status == "approved"
+                or (active is not None and active.approval_status == "approved")
+            ) and not revision_ready
+
+            if is_approved:
+                quiet("Approved")
+                note("This version is already approved. Request a revision if something should change.")
+                if st.button("Request revision", use_container_width=True, key="ws_needs_rev_approved"):
+                    st.session_state["ws_show_revision"] = True
+                    st.rerun()
+                prior = _prior_approved_finish(version, active)
+                if prior is not None and active and prior.finish_version_id != active.finish_version_id:
+                    if st.button("Compare with previous", key="ws_compare_prior"):
+                        st.session_state["ws_decide_focus_finish_id"] = prior.finish_version_id
+                        st.rerun()
+            else:
+                approve_disabled = (
+                    not decide_media.can_approve
+                    or brand_report.blocking
+                    or (job is not None and job.is_active)
+                )
+                if approve_disabled and decide_media.blocking_message:
+                    note(decide_media.blocking_message)
+                elif brand_report.blocking:
+                    note("Brand Check has a blocking issue. Fix it before approving.")
+                if st.button(
+                    "Approve",
+                    type="primary",
+                    use_container_width=True,
+                    key="ws_approve",
+                    disabled=approve_disabled,
+                ):
+                    result = save_version_decision(
+                        state.path, version=version, status="approved", note=""
+                    )
+                    if active is not None:
+                        from studio.service import set_finish_approval
+
+                        set_finish_approval(
+                            render_folder=version.folder,
+                            finish_version_id=active.finish_version_id,
+                            brand_id=DEFAULT_BRAND_ID,
+                            approval_status="approved",
+                        )
+                    report(result)
+                    if result.ok:
+                        st.session_state.pop("ws_revision_job_id", None)
+                        st.session_state.pop("ws_decide_focus_finish_id", None)
+                        _after_approve(state, version, title)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Needs Revision", use_container_width=True, key="ws_needs_rev"):
+                        st.session_state["ws_show_revision"] = True
+                        st.rerun()
+                with c2:
+                    if st.button("Reject", use_container_width=True, key="ws_reject"):
+                        result = save_version_decision(
+                            state.path, version=version, status="rejected", note=""
+                        )
+                        report(result)
+                        if result.ok:
+                            st.session_state["betty_flash"] = (
+                                "Rejected. This version will not be delivered."
+                            )
+                            st.rerun()
+
+            _render_revision_panel(state, version, active, job)
+
+            with st.expander("Creative Journal", expanded=False):
+                from ui.journal import journal_for_campaign
+
+                entries = journal_for_campaign(state)
+                if not entries:
+                    quiet("No journal entries yet.")
                 else:
-                    _apply_natural_revision(state, version, active, feedback.strip())
+                    for entry in entries[:4]:
+                        quiet(entry.text)
 
-    with st.expander("Version History", expanded=False):
-        for v in sorted(state.versions, key=lambda x: (x.template_id, x.version), reverse=True):
-            quiet(
-                f"{state.describe(v)} · {v.approval_status.replace('_', ' ')}"
+    with st.expander("Version details", expanded=False):
+        quiet("Internal version history for troubleshooting.")
+        for v in sorted(state.versions, key=lambda x: (x.template_id, x.version), reverse=True)[:12]:
+            quiet(f"{state.describe(v)} · {v.approval_status.replace('_', ' ')}")
+
+
+def _brand_check_for_decide(version, active, decide_media, job) -> "BrandCheckReport":
+    from services.brand_compliance import BrandCheckReport, evaluate_brand_compliance
+
+    if job and job.brand_check:
+        data = job.brand_check
+        items = []
+        from services.brand_compliance import BrandCheckItem
+
+        for raw in data.get("items") or []:
+            items.append(
+                BrandCheckItem(
+                    key=str(raw.get("key") or ""),
+                    label=str(raw.get("label") or ""),
+                    severity=str(raw.get("severity") or "pass"),  # type: ignore[arg-type]
+                    detail=str(raw.get("detail") or ""),
+                )
             )
+        return BrandCheckReport(
+            overall=str(data.get("overall") or "pass"),  # type: ignore[arg-type]
+            items=items,
+            brand_guide_loaded=bool(data.get("brand_guide_loaded")),
+            production_rules_loaded=bool(data.get("production_rules_loaded")),
+            brand_id=str(data.get("brand_id") or DEFAULT_BRAND_ID),
+        )
 
-    with st.expander("View Creative Review Details", expanded=False):
-        from ui.screens import review as review_screen
+    copy_text = ""
+    if job and job.plan:
+        copy_text = job.plan.proposed_copy or job.plan.original_copy
+    elif version.folder.is_dir():
+        from services.decide_revision import _original_hook
 
-        quiet("Full Creative Director Review tools.")
-        if st.button("Open full review tools", key="ws_full_review"):
-            st.session_state["ws_embed_review"] = True
-            st.rerun()
-        if st.session_state.get("ws_embed_review"):
-            review_screen.render(state)
+        try:
+            copy_text = _original_hook(version.folder)
+        except Exception:
+            copy_text = ""
+
+    return evaluate_brand_compliance(
+        brand_id=DEFAULT_BRAND_ID,
+        copy_text=copy_text,
+        media_path=decide_media.canonical,
+        expects_video=decide_media.expects_video,
+    )
+
+
+def _render_brand_check(brand_report) -> None:
+    st.write("")
+    st.markdown(
+        '<div class="betty-section">Brand Check</div>',
+        unsafe_allow_html=True,
+    )
+    if brand_report.blocking:
+        quiet("Needs attention")
+    elif brand_report.overall == "warning":
+        quiet("Needs attention")
+    else:
+        quiet("Passed")
+    for label in brand_report.passed_labels[:4]:
+        st.markdown(f"- {label}")
+    for item in brand_report.items:
+        if item.severity != "pass":
+            detail = f" — {item.detail}" if item.detail else ""
+            st.markdown(f"- {item.label}{detail}")
+    with st.expander("Brand Check details", expanded=False):
+        quiet(
+            "BettyOS evaluated this draft against the active Brand Guide and Production Rules."
+        )
+        for item in brand_report.items:
+            quiet(f"{item.severity.upper()} · {item.label}" + (f" · {item.detail}" if item.detail else ""))
+
+
+def _prior_approved_finish(version, active):
+    finishes = finish_records_for_version(version)
+    approved = [f for f in finishes if f.approval_status == "approved"]
+    if not approved:
+        return None
+    prior = max(approved, key=lambda f: f.finish_version_id or "")
+    if active and prior.finish_version_id == active.finish_version_id:
+        older = [f for f in approved if f.finish_version_id != active.finish_version_id]
+        if not older:
+            return None
+        return max(older, key=lambda f: f.finish_version_id or "")
+    return prior
+
+
+def _render_revision_panel(state, version, active, job) -> None:
+    from services.decide_revision import (
+        execute_revision_job,
+        load_job,
+        start_revision_job,
+        update_plan_copy,
+    )
+
+    show = bool(st.session_state.get("ws_show_revision")) or (
+        job is not None and job.status not in {"ready", "cancelled"}
+    )
+    if not show and not (job and job.status == "failed"):
+        return
+
+    st.write("")
+    quiet("What should change?")
+
+    if job and job.is_active:
+        quiet(job.phase_label or "Working on your revision…")
+        note("Revision is in progress. This action is locked until it finishes.")
+        return
+
+    if job and job.awaiting_confirmation and job.plan:
+        st.markdown(
+            '<div class="betty-section">Revision plan</div>',
+            unsafe_allow_html=True,
+        )
+        for line in job.plan.summary_lines:
+            st.markdown(f"- {line}")
+        st.write("")
+        quiet("Original")
+        quiet(f"“{job.plan.original_copy}”")
+        edited = st.text_area(
+            "Revised copy",
+            value=job.plan.proposed_copy,
+            key=f"ws_rev_proposed_{job.job_id}",
+            height=80,
+        )
+        if job.plan.why_changed:
+            quiet(f"Why it changed · {job.plan.why_changed}")
+        a1, a2, a3, a4 = st.columns(4)
+        with a1:
+            if st.button("Use this revision", type="primary", key="ws_use_rev"):
+                if edited.strip() != job.plan.proposed_copy:
+                    update_plan_copy(state.path, job, edited.strip())
+                    job = load_job(state.path, job.job_id) or job
+                _execute_revision_with_phases(state, version, active, job)
+        with a2:
+            if st.button("Edit revision", key="ws_edit_rev"):
+                note("Edit the revised copy above, then choose Use this revision.")
+        with a3:
+            if st.button("Try another direction", key="ws_try_rev"):
+                from services.decide_revision import propose_copy_revision
+
+                proposed, why = propose_copy_revision(
+                    feedback=job.feedback + " Try another quieter direction.",
+                    original=job.plan.original_copy,
+                    campaign_goal=state.goal or "",
+                )
+                update_plan_copy(state.path, job, proposed)
+                if job.plan:
+                    job.plan.why_changed = why
+                    from services.decide_revision import save_job
+
+                    save_job(state.path, job)
+                st.rerun()
+        with a4:
+            if st.button("Cancel", key="ws_cancel_rev"):
+                job.status = "cancelled"
+                from services.decide_revision import PHASE_LABELS, save_job
+
+                job.phase_label = PHASE_LABELS["cancelled"]
+                save_job(state.path, job)
+                st.session_state["ws_show_revision"] = False
+                st.session_state.pop("ws_revision_job_id", None)
+                st.rerun()
+        return
+
+    if job and job.status == "failed":
+        blocked_state(
+            "Revision could not finish",
+            job.error or "Something stopped this revision. Your feedback is preserved.",
+        )
+        if st.button("Retry Revision", type="primary", key="ws_retry_rev"):
+            st.session_state["ws_revision_text"] = job.feedback
+            st.session_state["ws_show_revision"] = True
+            st.session_state.pop("ws_revision_job_id", None)
+            # Force a fresh job on next apply by clearing failed id focus
+            _start_revision_from_feedback(state, version, active, job.feedback)
+        return
+
+    shortcut = st.selectbox(
+        "Shortcut",
+        options=[""] + list(REVISION_SHORTCUTS),
+        format_func=lambda x: "Optional shortcut…" if not x else x,
+        key="ws_revision_shortcut",
+    )
+    if shortcut and shortcut != "Other" and not (st.session_state.get("ws_revision_text") or "").strip():
+        st.session_state["ws_revision_text"] = shortcut
+    feedback = st.text_area(
+        "Feedback",
+        placeholder="The pacing feels rushed. The CTA feels disconnected.",
+        key="ws_revision_text",
+        height=80,
+        label_visibility="collapsed",
+    )
+    applying = st.session_state.get("ws_revision_applying")
+    if st.button(
+        "Apply Revision",
+        type="primary",
+        key="ws_apply_rev",
+        disabled=bool(applying),
+    ):
+        note_text = (st.session_state.get("ws_revision_text") or feedback or "").strip()
+        if not note_text:
+            note("Add a short note so I know what to change.")
+        else:
+            _start_revision_from_feedback(state, version, active, note_text)
+
+
+def _start_revision_from_feedback(state, version, active, feedback: str) -> None:
+    from services.decide_revision import start_revision_job
+
+    if active is None:
+        st.session_state["betty_flash"] = (
+            "I recorded your feedback. Create a finished draft first so I can apply supported revisions."
+        )
+        nav.goto_workspace("create", version_key=version.key)
+        return
+
+    st.session_state["ws_revision_applying"] = True
+    try:
+        with st.status("Interpreting your feedback", expanded=True) as status:
+            status.write("Reviewing the Brand Guide")
+            job = start_revision_job(
+                campaign_dir=state.path,
+                version_key=version.key,
+                finish_version_id=active.finish_version_id,
+                feedback=feedback,
+                render_folder=version.folder,
+                campaign_goal=state.goal or "",
+                brand_id=DEFAULT_BRAND_ID,
+            )
+            st.session_state["ws_revision_job_id"] = job.job_id
+            st.session_state["ws_show_revision"] = True
+            if job.status == "failed":
+                status.update(label="Revision stopped", state="error")
+            else:
+                status.update(label="Revision plan ready", state="complete")
+    finally:
+        st.session_state["ws_revision_applying"] = False
+    st.rerun()
+
+
+def _execute_revision_with_phases(state, version, active, job) -> None:
+    from services.decide_revision import execute_revision_job, load_job
+
+    st.session_state["ws_revision_applying"] = True
+    try:
+        with st.status(job.phase_label or "Preparing the revision", expanded=True) as status:
+
+            def progress(msg: str) -> None:
+                status.update(label=msg, state="running")
+                status.write(msg)
+
+            updated = execute_revision_job(
+                campaign_dir=state.path,
+                job=job,
+                version=version,
+                active=active,
+                brand_id=DEFAULT_BRAND_ID,
+                campaign_goal=state.goal or "",
+                platform=_platform_for(state, version),
+                progress=progress,
+            )
+            if updated.status == "ready":
+                status.update(label="Revision ready", state="complete")
+                st.session_state["ws_decide_focus_finish_id"] = updated.new_finish_version_id
+                st.session_state["ws_revision_job_id"] = updated.job_id
+                st.session_state["ws_show_revision"] = False
+                st.session_state["betty_flash"] = (
+                    "Revision ready. Review the new version — it is not approved yet."
+                )
+                target_key = updated.new_version_key or version.key
+                nav.goto_workspace("decide", version_key=target_key)
+            else:
+                status.update(label="Revision stopped", state="error")
+                st.session_state["ws_revision_job_id"] = updated.job_id
+                st.session_state["betty_flash"] = updated.error or "Revision could not finish."
+                st.rerun()
+    finally:
+        st.session_state["ws_revision_applying"] = False
+
+
+def _resolve_decide_preview(version, active) -> Path | None:
+    """Backward-compatible helper — canonical deliverable only, never poster."""
+    from ui.decide_media import resolve_decide_media
+
+    return resolve_decide_media(version, active).canonical
+
+
+def _confidence_for(active) -> str | None:
+    if active is None:
+        return None
+    decision = active.edit_decision or {}
+    if not isinstance(decision, dict):
+        return None
+    for key in ("confidence", "confidence_label", "overall_confidence"):
+        value = decision.get(key)
+        if value:
+            return str(value).replace("_", " ").title()
+    scores = decision.get("scores") or {}
+    if isinstance(scores, dict) and scores.get("overall") is not None:
+        try:
+            return f"{float(scores['overall']):.0%}" if float(scores["overall"]) <= 1 else str(scores["overall"])
+        except (TypeError, ValueError):
+            return str(scores["overall"])
+    return "Medium"
 
 
 def _decision_lines(active) -> list[str]:
@@ -649,147 +1279,77 @@ def _decision_lines(active) -> list[str]:
     return lines[:3]
 
 
-def _apply_natural_revision(state, version, active, feedback: str) -> None:
-    from studio.service import revise_best_edit
-
-    save_version_decision(state.path, version=version, status="needs_revision", note=feedback)
-    if active is None:
-        st.session_state["betty_flash"] = (
-            "I recorded your feedback. Create a finished draft first so I can apply supported revisions."
-        )
-        nav.goto_workspace("create", version_key=version.key)
-        return
-
-    with st.status("I’m addressing your feedback…", expanded=True) as status:
-        try:
-            outcome = revise_best_edit(
-                brand_id=DEFAULT_BRAND_ID,
-                render_folder=version.folder,
-                finish_version_id=active.finish_version_id,
-                revision_note=feedback,
-            )
-            if isinstance(outcome, dict) and not outcome.get("ok", True):
-                status.update(label="I could not apply that revision automatically.", state="error")
-                blocked_state(
-                    "Revision needs another path",
-                    str(outcome.get("error") or "Use Advanced review tools for a supported change."),
-                )
-                return
-            status.update(label="I revised the draft.", state="complete")
-            st.session_state["ws_show_revision"] = False
-            st.session_state["betty_flash"] = "I revised the draft. Review the new version."
-            nav.goto_workspace("decide", version_key=version.key)
-        except Exception as exc:  # noqa: BLE001
-            status.update(label="I could not apply that revision automatically.", state="error")
-            blocked_state(
-                "Revision needs another path",
-                f"{str(exc).splitlines()[-1]} You can use Advanced review tools to apply a supported change.",
-            )
-
-
 def _show_preview_path(path: Path) -> None:
-    suffix = path.suffix.lower()
-    if suffix in {".mp4", ".mov"}:
-        st.video(str(path))
-    elif suffix in {".png", ".jpg", ".jpeg"}:
-        st.image(str(path), use_container_width=True)
-    else:
-        quiet(path.name)
+    compact_media_preview(path, key=f"path_{path.name}")
 
 
-# --- Deliver ----------------------------------------------------------------
-
+# --- Deliver -----------------------------------------------------------------
 def _stage_deliver(state: CampaignState, continuation) -> None:
-    section("Ready to deliver")
+    from datetime import datetime
+
     approved = state.approved_versions
     if not approved and state.export_count == 0:
         empty_state(
             "Nothing approved yet",
-            "Approve a draft in Decide before downloading a publishing package.",
+            "Approve a draft in Decide before downloading a campaign package.",
         )
         if st.button("Review Draft", type="primary"):
             nav.goto_workspace("decide")
         return
 
-    from ui.export_service import (
-        actionable_incomplete_exclusions,
-        group_exclusions,
-    )
+    from src.campaign_intelligence.downloads import show_in_finder
+    from ui.export_service import actionable_incomplete_exclusions
 
     plan = build_plan(state, mode=PUBLISHING_MODE, selected_keys=set())
     summary = plan.summary
+    by_platform = _deliver_platform_groups(plan)
 
     with st.container(border=True):
         if plan.is_blocked or plan.is_empty:
-            st.markdown("**Publishing package blocked**")
+            st.markdown(
+                '<div class="betty-section">Campaign package blocked</div>',
+                unsafe_allow_html=True,
+            )
             for blocker in plan.blockers or ["No publishable final assets."]:
                 quiet(blocker)
             blocking = [
                 e for e in actionable_incomplete_exclusions(plan) if e.missing_fields
             ]
-            if blocking:
-                st.write("")
-                note("Incomplete required copy")
-                for exclusion in blocking:
-                    fields = ", ".join(exclusion.missing_fields) or exclusion.reason
-                    quiet(f"{exclusion.label} — missing: {fields}")
-                if st.button("Complete Publishing Copy", key="ws_complete_blocking_copy"):
-                    st.session_state["ws_complete_excluded"] = True
-                    st.rerun()
+            if blocking and st.button("Complete Publishing Copy", key="ws_complete_blocking_copy"):
+                st.session_state["ws_complete_excluded"] = True
+                st.rerun()
         else:
-            st.markdown("**Ready to publish**")
-            quiet(summary.readiness_headline or f"{len(plan.included)} items are ready to publish.")
-            st.write("")
-            quiet(f"{summary.ready_item_count} final item{'s' if summary.ready_item_count != 1 else ''}")
-
-            st.write("")
-            st.markdown("**Automatically excluded**")
-            if summary.superseded_count:
-                quiet(
-                    f"{summary.superseded_count} superseded or replaced version"
-                    f"{'s' if summary.superseded_count != 1 else ''}"
-                )
-            if summary.rejected_count:
-                quiet(
-                    f"{summary.rejected_count} needs-revision item"
-                    f"{'s' if summary.rejected_count != 1 else ''}"
-                )
-            if summary.incomplete_count:
-                quiet(
-                    f"{summary.incomplete_count} incomplete metadata record"
-                    f"{'s' if summary.incomplete_count != 1 else ''}"
-                )
-            if summary.orphaned_count:
-                quiet(
-                    f"{summary.orphaned_count} metadata record"
-                    f"{'s' if summary.orphaned_count != 1 else ''} with no matching visual"
-                )
-            if summary.duplicate_count:
-                quiet(
-                    f"{summary.duplicate_count} duplicate"
-                    f"{'s' if summary.duplicate_count != 1 else ''} removed"
-                )
-            if not any(
+            st.markdown(
+                '<div class="betty-section">Campaign Ready</div>',
+                unsafe_allow_html=True,
+            )
+            key_values(
                 [
-                    summary.superseded_count,
-                    summary.rejected_count,
-                    summary.incomplete_count,
-                    summary.orphaned_count,
-                    summary.duplicate_count,
+                    ("Assets", str(summary.ready_item_count or len(plan.included))),
+                    ("Package size", human_size(plan.total_bytes) if plan.total_bytes else "—"),
+                    ("Runway", _deliver_runway_label(state) or "—"),
                 ]
-            ):
-                quiet("Nothing was excluded.")
-
-            for info in plan.info_notes or summary.info_lines:
-                st.write("")
-                quiet(info)
+            )
+            st.write("")
+            for platform, items in by_platform.items():
+                st.markdown(
+                    f'<div class="betty-platform-block"><div class="plat">{platform.title()}</div>',
+                    unsafe_allow_html=True,
+                )
+                for item in items:
+                    label = item.content_type or item.label
+                    st.markdown(
+                        f'<span class="betty-check">✓</span> {label}',
+                        unsafe_allow_html=True,
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
 
         if plan.summary.blocking_copy_lines or (
             plan.validation_status == "ready_with_warnings" and plan.warnings
         ):
             st.write("")
-            note("Required publishing copy")
-            for warning in plan.summary.blocking_copy_lines or plan.warnings:
+            note("Required publishing copy needs attention")
+            for warning in (plan.summary.blocking_copy_lines or plan.warnings)[:3]:
                 quiet(warning)
             if st.button("Complete Publishing Copy", key="ws_complete_selected_copy"):
                 st.session_state["ws_complete_excluded"] = True
@@ -801,163 +1361,128 @@ def _stage_deliver(state: CampaignState, continuation) -> None:
         else:
             acknowledge = True
 
-        actionable = actionable_incomplete_exclusions(plan)
-        if actionable and not plan.is_blocked:
-            st.write("")
-            label = (
-                f"Complete {len(actionable)} Excluded Item"
-                f"{'s' if len(actionable) != 1 else ''}"
-            )
-            if st.button(label, key="ws_complete_excluded_btn"):
-                st.session_state["ws_complete_excluded"] = True
-                st.rerun()
-
-        orphaned = [e for e in plan.excluded if e.category == "orphaned"]
-        if orphaned and not plan.is_blocked:
-            st.write("")
-            quiet("Metadata without a matching final visual:")
-            from ui.publishing_copy_fix import (
-                archive_incomplete_record,
-                matching_pin_template_for_piece,
-            )
-
-            for index, exclusion in enumerate(orphaned):
-                quiet(f"{exclusion.label} — {exclusion.reason}")
-                pin_template = matching_pin_template_for_piece(
-                    state, exclusion.content_piece_id
-                )
-                c1, c2 = st.columns(2)
-                with c1:
-                    if pin_template:
-                        if st.button(
-                            "Create Matching Pin",
-                            key=f"ws_create_pin_{index}",
-                        ):
-                            st.session_state["betty_flash"] = (
-                                f"Open Create to render {pin_template.replace('_', ' ')} "
-                                f"for this piece, then return to Deliver."
-                            )
-                            nav.goto_workspace(
-                                "create",
-                                piece_id=exclusion.content_piece_id,
-                            )
-                    else:
-                        quiet("No supported pin renderer is available for this piece.")
-                with c2:
-                    if st.button(
-                        "Archive Incomplete Record",
-                        key=f"ws_archive_orphan_{index}",
-                    ):
-                        result = archive_incomplete_record(state, exclusion)
-                        if result.get("ok"):
-                            st.session_state["betty_flash"] = (
-                                "Record archived. It will no longer affect package readiness."
-                            )
-                        else:
-                            st.session_state["betty_flash"] = str(
-                                result.get("error") or "Could not archive record."
-                            )
-                        st.rerun()
-
-        st.write("")
-        cols = st.columns([1, 1])
-        with cols[0]:
-            create_disabled = not plan.create_enabled and not (
-                plan.validation_status == "ready_with_warnings" and acknowledge
-            )
-            if plan.is_empty or plan.is_blocked:
-                create_disabled = True
-            elif plan.validation_status == "ready_with_warnings" and not acknowledge:
-                create_disabled = True
-            else:
-                create_disabled = False
-            if st.button(
-                "Create Publishing Package",
-                type="primary",
-                key="ws_download",
-                disabled=create_disabled,
-            ):
-                result = create_export_package(
-                    state,
-                    mode=PUBLISHING_MODE,
-                    selected_keys=set(),
-                    acknowledge_warnings=acknowledge,
-                )
-                if result.ok and result.path:
-                    st.session_state["betty_flash"] = "Publishing package ready."
-                    st.session_state["ws_last_export"] = str(result.path)
-                    st.rerun()
-                else:
-                    report(result)
-        with cols[1]:
-            if st.button("Review Exclusions", key="ws_pkg_contents"):
-                st.session_state["ws_show_plan"] = True
-                st.rerun()
+        create_disabled = plan.is_empty or plan.is_blocked
+        if plan.validation_status == "ready_with_warnings" and not acknowledge:
+            create_disabled = True
 
         last = st.session_state.get("ws_last_export")
-        if last and Path(last).is_file():
-            st.write("")
+        last_path = Path(last) if last else None
+        package_ready = last_path is not None and last_path.is_file()
+
+        st.write("")
+        if package_ready:
+            st.markdown("**Package Ready**")
+            quiet(
+                f"{last_path.name} · {human_size(last_path.stat().st_size)} · "
+                f"{datetime.fromtimestamp(last_path.stat().st_mtime).strftime('%-d %b %Y, %H:%M')}"
+            )
             st.download_button(
-                "Save ZIP",
-                data=Path(last).read_bytes(),
-                file_name=Path(last).name,
+                "Download Campaign Package",
+                data=last_path.read_bytes(),
+                file_name=last_path.name,
                 mime="application/zip",
                 type="primary",
                 key="ws_zip_dl",
+                use_container_width=True,
             )
-            quiet(f"{Path(last).name} · {human_size(Path(last).stat().st_size)}")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button("Show in Finder", key="ws_pkg_finder", use_container_width=True):
+                    ok, message = show_in_finder(last_path)
+                    st.session_state["betty_flash"] = message
+                    st.rerun()
+            with c2:
+                if st.button("View Package Contents", key="ws_pkg_contents", use_container_width=True):
+                    st.session_state["ws_show_plan"] = True
+                    st.rerun()
+            with c3:
+                if st.button("Rebuild", key="ws_download", use_container_width=True, disabled=create_disabled):
+                    _create_campaign_package(state, acknowledge)
+        else:
+            if st.button(
+                "Build Campaign Package",
+                type="primary",
+                key="ws_download",
+                disabled=create_disabled,
+                use_container_width=True,
+            ):
+                _create_campaign_package(state, acknowledge)
 
     if st.session_state.get("ws_complete_excluded"):
         _deliver_complete_excluded(state, plan)
 
     if st.session_state.get("ws_show_plan"):
-        with st.expander("Review Exclusions", expanded=True):
-            grouped = group_exclusions(plan.excluded)
-            labels = {
-                "incomplete": "Incomplete (actionable first)",
-                "orphaned": "No matching final visual",
-                "rejected": "Needs revision",
-                "duplicate": "Duplicates",
-                "superseded": "Superseded or replaced",
-                "other": "Other",
-                "excluded": "Other",
-            }
-            for category, items in grouped.items():
-                if category == "superseded":
-                    with st.expander(
-                        f"{labels[category]} ({len(items)})",
-                        expanded=False,
-                    ):
-                        for exclusion in items:
-                            quiet(f"{exclusion.label} — {exclusion.reason}")
-                    continue
-                st.markdown(f"**{labels.get(category, category)} ({len(items)})**")
-                for exclusion in items:
-                    detail = exclusion.reason
-                    if exclusion.missing_fields:
-                        detail = f"{detail} · missing: {', '.join(exclusion.missing_fields)}"
-                    quiet(f"{exclusion.label} — {detail}")
-                st.write("")
-
+        with st.expander("Package contents", expanded=True):
             quiet(f"Publishable items: {len(plan.included)}")
             for item in plan.included:
-                lineage = item.finish_version_id or item.render_version_id or ""
-                quiet(f"{item.label} · {item.platform} · {lineage}")
+                quiet(f"✓ {item.label} · {item.platform}")
+            excluded_count = len(plan.excluded)
+            if excluded_count:
+                quiet(f"{excluded_count} excluded (drafts, superseded, incomplete)")
+            if st.button("Hide contents", key="ws_hide_plan"):
+                st.session_state["ws_show_plan"] = False
+                st.rerun()
 
     packages = list_existing_packages(state)
-    with st.expander("Package History", expanded=False):
+    with st.expander("Package archive", expanded=False):
+        quiet("Older campaign packages.")
         if not packages:
             quiet("No earlier packages for this campaign.")
         else:
             for path, created, size in packages[:8]:
-                quiet(f"{path.name} · {created} · {size}")
-                if path.is_file():
+                is_newest = last_path is not None and path.resolve() == last_path.resolve()
+                label = f"{'Newest · ' if is_newest else ''}{path.name} · {created} · {size}"
+                quiet(label)
+                if path.is_file() and not is_newest:
                     st.download_button(
                         f"Download {path.name}",
                         data=path.read_bytes(),
                         file_name=path.name,
                         key=f"ws_pkg_{path.name}",
                     )
+
+
+def _create_campaign_package(state: CampaignState, acknowledge: bool) -> None:
+    result = create_export_package(
+        state,
+        mode=PUBLISHING_MODE,
+        selected_keys=set(),
+        acknowledge_warnings=acknowledge,
+    )
+    if result.ok and result.path:
+        st.session_state["betty_flash"] = "Campaign package ready."
+        st.session_state["ws_last_export"] = str(result.path)
+        st.rerun()
+    else:
+        report(result)
+
+
+def _deliver_platform_groups(plan) -> dict:
+    groups = {}
+    for item in plan.included:
+        platform = (item.platform or "other").lower()
+        groups.setdefault(platform, []).append(item)
+    order = ["instagram", "pinterest", "carousel", "website", "email", "waitlist", "other"]
+    ordered = {key: groups[key] for key in order if key in groups}
+    ordered.update({k: v for k, v in groups.items() if k not in order})
+    return ordered
+
+
+def _deliver_runway_label(state: CampaignState):
+    if state.path is None:
+        return None
+    try:
+        from src.campaign_intelligence import load_intelligence
+
+        intel = load_intelligence(state.path)
+        if intel is None:
+            return None
+        runway = intel.current_runway()
+        if runway is None:
+            return None
+        return f"{runway.days.min_days}–{runway.days.max_days} days"
+    except Exception:
+        return None
 
 
 def _deliver_complete_excluded(state: CampaignState, plan) -> None:
@@ -1056,6 +1581,14 @@ def _journal_panel(state: CampaignState) -> None:
 def _advanced_panel(state: CampaignState, stage_key: str) -> None:
     with st.expander("Advanced / Diagnostics", expanded=False):
         quiet("Pipeline tools remain available for debugging and exceptional adjustments.")
+        quiet("Workflow stage (troubleshooting)")
+        stage_cols = st.columns(len(STAGE_OPTIONS))
+        for col, label in zip(stage_cols, STAGE_OPTIONS):
+            with col:
+                if st.button(label, key=f"adv_stage_{label}", use_container_width=True):
+                    st.session_state[STAGE_STATE_KEY] = label
+                    st.session_state[STAGE_WIDGET_KEY] = label
+                    st.rerun()
         c1, c2, c3 = st.columns(3)
         with c1:
             if st.button("Content & Render tools", key="adv_create"):
@@ -1115,11 +1648,17 @@ def _focus_piece(state: CampaignState, continuation):
     return state.pieces[0] if state.pieces else None
 
 
+def _is_user_facing_version(version) -> bool:
+    from src.asset_visibility import is_user_facing_asset_folder
+
+    return is_user_facing_asset_folder(getattr(version, "folder", None))
+
+
 def _focus_version(state: CampaignState, continuation):
     key = continuation.focus_version_key or nav.focus_version_key()
     if key:
         for version in state.versions:
-            if version.key == key:
+            if version.key == key and _is_user_facing_version(version):
                 return version
     return None
 

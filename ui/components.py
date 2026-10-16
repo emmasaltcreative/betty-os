@@ -19,7 +19,7 @@ from ui.status import Status
 
 THEME = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Source+Sans+3:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,500&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Work+Sans:wght@400;500&display=swap');
 
 :root {
   --cream: #faf7f1;
@@ -41,9 +41,9 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 
 [data-testid="stAppViewContainer"] .block-container {
-  padding-top: 2.4rem;
-  padding-bottom: 4rem;
-  max-width: 1180px;
+  padding-top: 1.35rem;
+  padding-bottom: 2.2rem;
+  max-width: 1120px;
 }
 
 h1, h2, h3, h4, .betty-serif {
@@ -56,15 +56,15 @@ h1, h2, h3, h4, .betty-serif {
 /* Page title */
 .betty-title {
   font-family: "Source Serif 4", Georgia, serif;
-  font-size: 1.85rem;
+  font-size: 1.65rem;
   line-height: 1.2;
-  margin: 0 0 0.2rem;
+  margin: 0 0 0.15rem;
   font-weight: 600;
 }
 .betty-subtitle {
   color: var(--muted);
-  font-size: 0.95rem;
-  margin: 0 0 1.4rem;
+  font-size: 0.9rem;
+  margin: 0 0 0.85rem;
   max-width: 62ch;
 }
 
@@ -101,6 +101,35 @@ h1, h2, h3, h4, .betty-serif {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin: 0 0 1rem;
+}
+.betty-mark {
+  color: #2a2320;
+  margin: 0 0 1.35rem;
+}
+.betty-mark svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  margin: 0 0 0.7rem;
+}
+.betty-wordmark {
+  font-family: Fraunces, "Iowan Old Style", Georgia, serif;
+  font-weight: 500;
+  font-size: 0.92rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  margin: 0;
+  color: #2a2320;
+}
+.betty-atelier {
+  font-family: "Work Sans", "Helvetica Neue", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #3a544a;
+  margin: 0.28rem 0 0;
 }
 
 /* Sidebar navigation radio reads as a nav list */
@@ -174,6 +203,95 @@ h1, h2, h3, h4, .betty-serif {
 .betty-badge.blocked   { background: #f9e9e5; color: #8d3b2f; border-color: #eed3cc; }
 .betty-badge-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 
+/* Compact media previews — never dominate the viewport */
+.betty-preview {
+  max-width: 380px;
+  width: 100%;
+  max-height: 420px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--cream-deep);
+  margin: 0.35rem 0 0.5rem;
+}
+.betty-preview img,
+.betty-preview video,
+.betty-preview [data-testid="stImage"] img,
+.betty-preview [data-testid="stVideo"] video {
+  max-width: 100% !important;
+  max-height: 400px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block;
+  margin: 0 auto;
+}
+.betty-preview-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0 0 0.35rem;
+}
+
+/* Campaign timeline */
+.betty-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0.6rem;
+}
+.betty-timeline-item {
+  display: grid;
+  grid-template-columns: 1.1rem 1fr auto;
+  gap: 0.45rem;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+.betty-timeline-mark { color: #c4baaa; font-size: 0.7rem; }
+.betty-timeline-complete .betty-timeline-mark { color: var(--jade); }
+.betty-timeline-current .betty-timeline-mark { color: var(--jade-deep); }
+.betty-timeline-label { color: var(--ink); font-weight: 500; }
+.betty-timeline-upcoming .betty-timeline-label { color: var(--muted); font-weight: 400; }
+.betty-timeline-detail, .betty-timeline-when {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.betty-timeline-current {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0.15rem 0 0.4rem;
+}
+
+/* Focus mode — calm workspace chrome */
+.betty-focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: baseline;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 0.75rem;
+}
+.betty-focus-bar .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.betty-focus-bar .value { font-weight: 600; font-size: 0.92rem; }
+
+/* Deliver platform checklist */
+.betty-platform-block {
+  margin: 0.35rem 0 0.55rem;
+}
+.betty-platform-block .plat {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.15rem;
+}
+.betty-check {
+  color: var(--jade);
+  font-size: 0.85rem;
+  margin-left: 0.15rem;
+}
+
 /* Progress rail */
 .betty-rail {
   display: flex;
@@ -182,8 +300,8 @@ h1, h2, h3, h4, .betty-serif {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 0.55rem 0.3rem;
-  margin-bottom: 1.3rem;
+  padding: 0.4rem 0.25rem;
+  margin-bottom: 0.85rem;
   overflow-x: auto;
 }
 .betty-rail-step {
@@ -399,12 +517,239 @@ h1, h2, h3, h4, .betty-serif {
 [data-testid="stHeader"] { background: transparent; }
 footer, #MainMenu { visibility: hidden; }
 hr { border-color: var(--line); margin: 1.5rem 0; }
+
+/* Today — the house, not a dashboard card.
+   Scoped with :has so Campaigns, Library, and the workspace keep their working chrome. */
+.stApp:has(.betty-house),
+[data-testid="stApp"]:has(.betty-house) {
+  background: #f6f1e7;
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"],
+.stApp:has(.betty-house) [data-testid="stSidebar"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] {
+  background: #f6f1e7;
+  color: #2a2320;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] {
+  border-right: 1px solid rgba(42, 35, 32, 0.12);
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"] .block-container,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"] .block-container {
+  max-width: 640px;
+  padding-top: 4.25rem;
+  padding-bottom: 4.5rem;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label {
+  border-radius: 0;
+  padding: 0.28rem 0;
+  background: transparent;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label:hover,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+  background: transparent;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label p,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label p {
+  font-family: "Work Sans", "Helvetica Neue", sans-serif !important;
+  font-size: 0.68rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2em !important;
+  text-transform: uppercase;
+  color: #2a2320;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
+  color: #3a544a !important;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label > div > div > div:first-child,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [role="radiogroup"] label > div > div > div:first-child {
+  display: none !important;
+}
+.stApp:has(.betty-house) .betty-aside-long,
+[data-testid="stApp"]:has(.betty-house) .betty-aside-long,
+.stApp:has(.betty-house) [data-testid="stMarkdown"]:has(.betty-aside-long),
+[data-testid="stApp"]:has(.betty-house) [data-testid="stMarkdown"]:has(.betty-aside-long) {
+  display: none !important;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+  gap: 0.2rem;
+}
+.stApp:has(.betty-house) .betty-badge,
+[data-testid="stApp"]:has(.betty-house) .betty-badge {
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: "Work Sans", "Helvetica Neue", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #3a544a;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] .betty-quiet,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] .betty-quiet,
+.stApp:has(.betty-house) [data-testid="stSidebar"] .betty-brand-note,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] .betty-brand-note {
+  font-family: Literata, Georgia, serif;
+  font-size: 0.78rem !important;
+  line-height: 1.45;
+  color: #6f6355;
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button {
+  border-radius: 0 !important;
+  font-family: "Work Sans", "Helvetica Neue", sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+  padding: 0.9rem 1.35rem !important;
+  width: auto !important;
+  box-shadow: none !important;
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="primary"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="primary"] {
+  background: #2a2320 !important;
+  border: 1px solid #2a2320 !important;
+  color: #f6f1e7 !important;
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="primary"]:hover,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="primary"]:hover {
+  background: #3a544a !important;
+  border-color: #3a544a !important;
+}
+.stApp:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="secondary"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stAppViewContainer"] .stButton > button[kind="secondary"] {
+  background: transparent !important;
+  border: none !important;
+  color: #3a544a !important;
+  padding: 0.35rem 0 !important;
+}
+.stApp:has(.betty-house) [data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stVerticalBlockBorderWrapper"] {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.stApp:has(.betty-house) [data-testid="stMarkdown"],
+[data-testid="stApp"]:has(.betty-house) [data-testid="stMarkdown"] {
+  margin-bottom: 0;
+}
+.stApp:has(.betty-house) [data-testid="stSidebar"] .stButton > button,
+[data-testid="stApp"]:has(.betty-house) [data-testid="stSidebar"] .stButton > button {
+  background: transparent !important;
+  color: #2a2320 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-family: Fraunces, "Iowan Old Style", Georgia, serif !important;
+  font-style: italic !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-align: left;
+  justify-content: flex-start;
+  width: 100% !important;
+  padding: 0.35rem 0.15rem !important;
+  font-size: 1.02rem !important;
+}
+.house-mark {
+  color: #2a2320;
+  margin: 0 0 1.15rem;
+}
+.house-mark svg,
+.betty-petal {
+  width: 26px !important;
+  height: 26px !important;
+  display: block;
+}
+.house-date {
+  font-family: "Work Sans", "Helvetica Neue", sans-serif !important;
+  font-size: 0.62rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  color: #6f6355 !important;
+  margin: 0 0 2.4rem;
+}
+.house-piece { max-width: 36rem; }
+.house-kicker {
+  font-family: "Work Sans", "Helvetica Neue", sans-serif !important;
+  font-size: 0.68rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.28em !important;
+  text-transform: uppercase;
+  color: #3a544a !important;
+  margin: 0 0 0.75rem;
+}
+.house-title {
+  font-family: Fraunces, "Iowan Old Style", Georgia, serif !important;
+  font-style: italic !important;
+  font-weight: 500 !important;
+  font-size: clamp(2.05rem, 4vw, 2.75rem) !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.015em !important;
+  color: #2a2320 !important;
+  margin: 0 0 1rem;
+}
+.house-body {
+  font-family: Literata, Georgia, serif !important;
+  font-size: 1.05rem !important;
+  font-weight: 400 !important;
+  line-height: 1.65 !important;
+  color: #2a2320 !important;
+  max-width: 42ch;
+  margin: 0 0 0.85rem;
+}
+.house-sign {
+  font-family: Literata, Georgia, serif !important;
+  font-style: italic !important;
+  font-size: 0.95rem !important;
+  line-height: 1.5 !important;
+  color: #6f6355 !important;
+  max-width: 42ch;
+  margin: 0 0 1.75rem;
+}
 </style>
 """
 
 
 def inject_theme() -> None:
     st.markdown(THEME, unsafe_allow_html=True)
+
+
+def brand_mark_svg(mask_id: str = "bettyPetal") -> str:
+    """Inline the active four-petal mark. Geometry comes from the brand asset, not a redraw."""
+    import re
+
+    from services.active_logo import resolve_active_logo
+
+    mark = resolve_active_logo(bootstrap=False)
+    path = mark.absolute_path if mark is not None else None
+    if path is None or not path.is_file() or path.suffix.lower() != ".svg":
+        return ""
+    raw = path.read_text(encoding="utf-8")
+    start = raw.find("<svg")
+    if start < 0:
+        return ""
+    svg = raw[start:]
+    svg = re.sub(r"<title>.*?</title>", "", svg, flags=re.S)
+    svg = re.sub(r"<desc>.*?</desc>", "", svg, flags=re.S)
+    svg = svg.replace("center-knockout", mask_id)
+    svg = svg.replace('fill="#353149"', 'fill="currentColor"')
+    svg = re.sub(r'\s(?:width|height)="[^"]*"', "", svg, count=2)
+    svg = svg.replace(
+        "<svg ",
+        f'<svg class="betty-petal" aria-hidden="true" ',
+        1,
+    )
+    return svg
 
 
 def _esc(text: object) -> str:
@@ -441,8 +786,9 @@ def note(text: str) -> None:
     st.markdown(f'<p class="betty-note">{_esc(text)}</p>', unsafe_allow_html=True)
 
 
-def quiet(text: str) -> None:
-    st.markdown(f'<p class="betty-quiet">{_esc(text)}</p>', unsafe_allow_html=True)
+def quiet(text: str, *, extra_class: str = "") -> None:
+    klass = "betty-quiet" + (f" {extra_class}" if extra_class else "")
+    st.markdown(f'<p class="{klass}">{_esc(text)}</p>', unsafe_allow_html=True)
 
 
 # --- Badges ----------------------------------------------------------------
@@ -694,8 +1040,77 @@ def saved_note(what: str, when: str | None = None) -> None:
 
 # --- Media previews --------------------------------------------------------
 
+PREVIEW_MAX_WIDTH = 380
+
+
+def compact_media_preview(
+    path: Path | None = None,
+    *,
+    version=None,
+    key: str = "preview",
+    allow_expand: bool = True,
+    poster: Path | None = None,
+) -> None:
+    """Small, aspect-preserving preview with optional expand modal.
+
+    For video, ``poster`` is only a loading/poster hint — never a replacement
+    for the canonical MP4/MOV. Streamlit's player still receives the video file.
+    """
+    target: Path | None = path
+    if target is None and version is not None:
+        target = getattr(version, "primary_path", None)
+    if target is None or not Path(target).is_file():
+        if version is not None:
+            media_preview(version, key_prefix=key)
+        else:
+            empty_state("Preview unavailable", "The preview file is no longer on disk.")
+        return
+
+    target = Path(target)
+    suffix = target.suffix.lower()
+    st.markdown('<div class="betty-preview">', unsafe_allow_html=True)
+    if suffix in {".mp4", ".mov", ".webm", ".m4v"}:
+        # Canonical video with controls. Poster frames are not shown as the
+        # primary surface — that previously hid finished.mp4 behind preview.jpg.
+        st.video(str(target))
+        if poster is not None and Path(poster).is_file():
+            quiet(f"Poster frame on file · {Path(poster).name}")
+    elif suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        st.image(str(target), width=PREVIEW_MAX_WIDTH)
+    elif suffix in {".md", ".txt"}:
+        try:
+            caption_body(target.read_text(encoding="utf-8")[:1200])
+        except OSError:
+            quiet("This draft could not be read.")
+    else:
+        quiet(f"No preview for {suffix.lstrip('.').upper()} files.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if allow_expand and suffix in {".mp4", ".mov", ".webm", ".m4v", ".png", ".jpg", ".jpeg", ".webp"}:
+        cols = st.columns([1, 1, 2])
+        with cols[0]:
+            if st.button("Expand", key=f"{key}_expand"):
+                st.session_state[f"{key}_modal"] = str(target)
+                st.rerun()
+        if st.session_state.get(f"{key}_modal") == str(target):
+            _preview_dialog(target, session_key=f"{key}_modal")
+
+
+@st.dialog("Preview")
+def _preview_dialog(path: Path, *, session_key: str) -> None:
+    suffix = path.suffix.lower()
+    if suffix in {".mp4", ".mov"}:
+        st.video(str(path))
+    else:
+        st.image(str(path), use_container_width=True)
+    quiet(path.name)
+    if st.button("Close", key=f"close_{session_key}"):
+        st.session_state.pop(session_key, None)
+        st.rerun()
+
+
 def media_preview(version, *, key_prefix: str = "") -> None:
-    """Preview a render version: video, image set, or copy draft."""
+    """Preview a render version: video, image set, or copy draft — compact by default."""
     primary = version.primary_path
     if primary is None or not primary.is_file():
         empty_state("Preview unavailable", "The files for this version are no longer on disk.")
@@ -703,20 +1118,22 @@ def media_preview(version, *, key_prefix: str = "") -> None:
 
     suffix = primary.suffix.lower()
     if suffix in {".mp4", ".mov"}:
-        st.video(str(primary))
+        compact_media_preview(primary, key=f"{key_prefix}vid_{version.key}")
         return
     if suffix in {".png", ".jpg", ".jpeg"}:
         images = [
             p for p in version.media_files if p.suffix.lower() in {".png", ".jpg", ".jpeg"}
         ]
         if len(images) > 1:
-            for row_start in range(0, len(images), 3):
+            st.markdown('<div class="betty-preview">', unsafe_allow_html=True)
+            for row_start in range(0, min(len(images), 6), 3):
                 columns = st.columns(3)
                 for column, image in zip(columns, images[row_start : row_start + 3]):
                     with column:
                         st.image(str(image), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.image(str(primary), use_container_width=True)
+            compact_media_preview(primary, key=f"{key_prefix}img_{version.key}")
         return
     if suffix in {".md", ".txt"}:
         try:
@@ -725,6 +1142,32 @@ def media_preview(version, *, key_prefix: str = "") -> None:
             quiet("This draft could not be read.")
         return
     quiet(f"No preview available for {primary.suffix.lstrip('.').upper()} files.")
+
+
+def focus_bar(
+    *,
+    campaign: str,
+    step: str,
+    estimate: str | None = None,
+    action: str | None = None,
+) -> None:
+    """Compact campaign focus chrome for active work."""
+    parts = [
+        f'<div><div class="label">Campaign</div><div class="value">{_esc(campaign)}</div></div>',
+        f'<div><div class="label">Current step</div><div class="value">{_esc(step)}</div></div>',
+    ]
+    if estimate and estimate != "—":
+        parts.append(
+            f'<div><div class="label">Estimated time</div><div class="value">{_esc(estimate)}</div></div>'
+        )
+    if action:
+        parts.append(
+            f'<div><div class="label">Next</div><div class="value">{_esc(action)}</div></div>'
+        )
+    st.markdown(
+        f'<div class="betty-focus-bar">{"".join(parts)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def file_summary(version, *, include_metadata: bool = False) -> str:

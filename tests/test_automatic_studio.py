@@ -380,7 +380,12 @@ class LogoTreatmentRegressionTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_seed_jade_rectangle_is_not_a_suitable_mark(self) -> None:
-        from studio.brand_assets import analyze_mark_pixels, select_best_logo_asset
+        from studio.brand_assets import (
+            analyze_mark_pixels,
+            get_asset,
+            is_suitable_transparent_mark,
+            select_best_logo_asset,
+        )
 
         seed = (
             ROOT
@@ -395,7 +400,20 @@ class LogoTreatmentRegressionTests(unittest.TestCase):
         analysis = analyze_mark_pixels(seed)
         self.assertTrue(analysis["looks_like_solid_rectangle"])
         self.assertFalse(analysis["suitable_transparent_mark"])
-        self.assertIsNone(select_best_logo_asset(DEFAULT_BRAND_ID))
+
+        # The jade placeholder must never be treated as a suitable active mark,
+        # even when a valid Settings logo is also present.
+        seed_asset = get_asset("ba_12a2e9d21f", DEFAULT_BRAND_ID)
+        if seed_asset is not None:
+            self.assertFalse(is_suitable_transparent_mark(seed_asset))
+
+        selected = select_best_logo_asset(DEFAULT_BRAND_ID)
+        if selected is None:
+            # No suitable Settings logo configured — correct for an empty library.
+            return
+        self.assertNotEqual(selected.asset_id, "ba_12a2e9d21f")
+        self.assertNotIn("seed_logo", selected.file_path)
+        self.assertTrue(is_suitable_transparent_mark(selected))
 
     def test_current_instagram_reel_draft_omits_jade_badge(self) -> None:
         """Regression: Reading Hour Instagram Reels draft must omit the jade badge."""

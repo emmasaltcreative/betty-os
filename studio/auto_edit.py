@@ -1092,7 +1092,24 @@ def parse_revision_request(note: str) -> dict[str, Any]:
         intents.append("reduce_grain")
     if any(w in lower for w in ("pac", "rushed", "fast", "slow")):
         intents.append("adjust_pacing_rerender")
-    if any(w in lower for w in ("text", "copy", "explanatory", "caption")):
+    if any(
+        w in lower
+        for w in (
+            "text",
+            "copy",
+            "explanatory",
+            "caption",
+            "verbiage",
+            "wording",
+            "words",
+            "language",
+            "phrase",
+            "hook",
+            "headline",
+            "title",
+            "cta",
+        )
+    ):
         intents.append("adjust_copy_rerender")
     if "ending" in lower:
         intents.append("adjust_ending_rerender")

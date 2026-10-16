@@ -69,11 +69,15 @@ def _empty_state(**overrides):
 
 
 class NavigationReductionTests(unittest.TestCase):
-    def test_primary_nav_is_five_destinations(self) -> None:
+    def test_primary_nav_is_four_destinations(self) -> None:
         self.assertEqual(
             list(NAV_ITEMS),
-            ["Today", "Campaigns", "Library", "Insights", "Settings"],
+            ["Today", "Campaigns", "Library", "Settings"],
         )
+        # Insights remains available as a deep link but is hidden until connected.
+        from ui import nav as nav_mod
+
+        self.assertIn("Insights", nav_mod.HIDDEN_NAV_ITEMS)
 
     def test_pipeline_pages_not_in_primary_nav(self) -> None:
         forbidden = {"Create", "Studio", "Review", "Revisions", "Approvals", "Export", "Home"}

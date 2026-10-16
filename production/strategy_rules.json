@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "description": "Configurable campaign strategy and production planning assumptions for BettyOS. These are planning assumptions, not universal facts.",
+  "filming_availability_default_minutes": 60,
+  "average_approval_turnaround_days": 2,
+  "standard_editing_buffer_minutes": 25,
+  "reshoot_buffer_days": 3,
+  "preferred_posting_frequency": {
+    "Instagram": {"min_per_week": 2, "max_per_week": 3},
+    "Pinterest": {"min_per_week": 3, "max_per_week": 4},
+    "TikTok": {"min_per_week": 2, "max_per_week": 4},
+    "Email": {"min_per_week": 0, "max_per_week": 1},
+    "Waitlist": {"min_per_week": 0, "max_per_week": 1},
+    "YouTube Shorts": {"min_per_week": 1, "max_per_week": 2}
+  },
+  "shipping_cutoff_margin_days": 7,
+  "production_capacity_sessions_per_week": 2,
+  "lead_times": {
+    "simple_organic_burst": {
+      "label": "Simple organic content burst",
+      "min_days": 3,
+      "max_days": 7
+    },
+    "small_seasonal": {
+      "label": "Small seasonal campaign",
+      "min_days": 14,
+      "max_days": 21
+    },
+    "product_education": {
+      "label": "Product education campaign",
+      "min_days": 21,
+      "max_days": 35
+    },
+    "waitlist_or_preorder": {
+      "label": "Waitlist or preorder campaign",
+      "min_days": 28,
+      "max_days": 56
+    },
+    "major_product_launch": {
+      "label": "Major product launch",
+      "min_days": 56,
+      "max_days": 84
+    },
+    "holiday_gifting": {
+      "label": "Holiday gifting campaign",
+      "min_days": 56,
+      "max_days": 98
+    },
+    "influencer_or_partnership": {
+      "label": "Influencer or partnership campaign",
+      "min_days": 42,
+      "max_days": 84
+    },
+    "paid_with_testing": {
+      "label": "Paid campaign requiring testing",
+      "min_days": 28,
+      "max_days": 56
+    }
+  },
+  "deliverable_assumptions": {
+    "usable_shot_rate": 0.7,
+    "assets_per_hero_shot_min": 1,
+    "assets_per_hero_shot_max": 2,
+    "editing_minutes_per_asset_min": 4,
+    "editing_minutes_per_asset_max": 7
+  },
+  "evidence_policy": {
+    "forbid_unsupported_performance_forecasts": true,
+    "operational_estimates_are_not_forecasts": true
+  }
+}

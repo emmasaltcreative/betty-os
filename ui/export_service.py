@@ -1182,7 +1182,9 @@ def _summarize(plan: ExportPlan) -> PackageSummary:
 
 
 def build_publishing_plan(state: CampaignState) -> ExportPlan:
-    root = f"{_campaign_slug(state)}_publishing-package"
+    from src.campaign_delivery import human_delivery_root
+
+    root = human_delivery_root(state)
     plan = ExportPlan(mode=PUBLISHING_MODE, root_folder=root)
     groups: dict[str, list[RenderVersion]] = {}
     for version in state.versions:
@@ -1456,6 +1458,16 @@ def build_plan(
     selected_keys: set[str] | None = None,
 ) -> ExportPlan:
     """Decide what a package would contain, without writing anything."""
+    from dataclasses import replace
+
+    from src.asset_visibility import filter_user_facing_versions
+
+    # Never package internal QA / smoke assets.
+    if state.versions:
+        filtered = filter_user_facing_versions(state.versions)
+        if len(filtered) != len(state.versions):
+            state = replace(state, versions=filtered)
+
     resolved = normalize_mode(mode)
     if resolved == ARCHIVE_MODE:
         return build_archive_plan(state)
@@ -1503,8 +1515,12 @@ def build_plan(
 # --- Manifest / README / ZIP -------------------------------------------------
 
 def _archive_name(state: CampaignState, mode: str) -> str:
-    campaign = state.path.name if state.path else "campaign"
     resolved = normalize_mode(mode)
+    if resolved == PUBLISHING_MODE:
+        from src.campaign_delivery import human_archive_filename
+
+        return human_archive_filename(state)
+    campaign = state.path.name if state.path else "campaign"
     return f"{campaign}_{timestamp_stamp()}_{resolved}.zip"
 
 
@@ -1582,12 +1598,15 @@ def _manifest_payload(state: CampaignState, plan: ExportPlan, created_at: str) -
         "package_type": MODE_LABELS.get(plan.mode, plan.mode),
         "mode": plan.mode,
         "campaign": state.name,
+        "campaign_name": state.name,
+        "campaign_id": state.path.name if state.path else None,
         "goal": state.goal,
         "created_at": created_at,
         "validation_status": plan.validation_status,
         "warnings": plan.warnings,
         "blockers": plan.blockers,
         "summary": asdict(plan.summary),
+        "active_brand_mark": _manifest_active_logo(),
         "deliverables": deliverables,
         "excluded": [
             {
@@ -1601,11 +1620,32 @@ def _manifest_payload(state: CampaignState, plan: ExportPlan, created_at: str) -
         "duplicates_removed": [asdict(d) for d in plan.duplicates_removed],
         "technical": {
             "root_folder": plan.root_folder,
+            "campaign_id": state.path.name if state.path else None,
             "file_count": plan.file_count,
             "total_bytes": plan.total_bytes,
             "include_metadata": plan.include_metadata,
         },
     }
+
+
+def _manifest_active_logo() -> dict:
+    """Record the Settings-selected logo by asset id — never absolute machine paths."""
+    try:
+        from services.active_logo import resolve_active_logo
+
+        mark = resolve_active_logo(bootstrap=True)
+        if mark is None:
+            return {"asset_id": None, "status": "none"}
+        return {
+            "asset_id": mark.asset_id,
+            "display_name": mark.display_name,
+            "storage_ref": mark.storage_ref,
+            "lineage_id": mark.lineage_id,
+            "suitable": mark.suitable,
+            "status": "active",
+        }
+    except Exception:
+        return {"asset_id": None, "status": "unavailable"}
 
 
 def create_export_package(
@@ -1650,20 +1690,56 @@ def create_export_package(
     written = 0
     try:
         with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            publishing = normalize_mode(mode) == PUBLISHING_MODE
             for item in plan.included:
                 for pkg in item.package_files:
                     if not pkg.source.is_file():
                         continue
-                    archive.write(pkg.source, pkg.archive_name)
+                    # Human packages: media only here; copy becomes PDF/DOCX docs.
+                    if publishing and pkg.role in {"caption", "copy", "metadata"}:
+                        continue
+                    if publishing and (
+                        pkg.archive_name.lower().endswith(".txt")
+                        or pkg.archive_name.lower().endswith(".md")
+                    ):
+                        continue
+                    # Remap media into human root / platform folders (already set).
+                    archive_name = (
+                        _humanize_platform_folder(pkg.archive_name)
+                        if publishing
+                        else pkg.archive_name
+                    )
+                    archive.write(pkg.source, archive_name)
                     written += 1
-            readme_name = f"{plan.root_folder}/README.txt"
-            manifest_name = f"{plan.root_folder}/manifest.json"
-            archive.writestr(readme_name, _readme(state, plan, created_at))
-            archive.writestr(
-                manifest_name,
-                json.dumps(_manifest_payload(state, plan, created_at), indent=2) + "\n",
-            )
-            written += 2
+            # Campaign documents — founder-facing package contents
+            for relative, source in _campaign_package_documents(state, plan.root_folder, plan=plan):
+                if source is None:
+                    continue
+                if isinstance(source, Path) and source.is_file():
+                    archive.write(source, relative)
+                    written += 1
+                elif isinstance(source, (bytes, bytearray)):
+                    archive.writestr(relative, bytes(source))
+                    written += 1
+                elif isinstance(source, str):
+                    archive.writestr(relative, source)
+                    written += 1
+            manifest_body = json.dumps(_manifest_payload(state, plan, created_at), indent=2) + "\n"
+            if publishing:
+                archive.writestr(f"{plan.root_folder}/BettyOS Data/manifest.json", manifest_body)
+                # Keep a short internal package note under BettyOS Data only.
+                archive.writestr(
+                    f"{plan.root_folder}/BettyOS Data/package-notes.txt",
+                    _readme(state, plan, created_at),
+                )
+                written += 2
+            else:
+                readme_name = f"{plan.root_folder}/README.txt"
+                manifest_name = f"{plan.root_folder}/Manifest.json"
+                archive.writestr(readme_name, _readme(state, plan, created_at))
+                archive.writestr(manifest_name, manifest_body)
+                archive.writestr(f"{plan.root_folder}/manifest.json", manifest_body)
+                written += 3
     except (OSError, zipfile.BadZipFile) as exc:
         target.unlink(missing_ok=True)
         return ExportResult(
@@ -1689,7 +1765,7 @@ def create_export_package(
 
     return ExportResult(
         ok=True,
-        message="Publishing package created."
+        message="Campaign package created."
         if normalize_mode(mode) == PUBLISHING_MODE
         else "Archive package created.",
         path=target,
@@ -1704,19 +1780,176 @@ def create_export_package(
     )
 
 
+def _campaign_package_documents(
+    state: CampaignState,
+    root: str,
+    *,
+    plan: ExportPlan | None = None,
+) -> list[tuple[str, Path | str | bytes | None]]:
+    """Founder-facing campaign documents for a professional package layout."""
+    docs: list[tuple[str, Path | str | bytes | None]] = []
+
+    if plan is not None and plan.mode == PUBLISHING_MODE:
+        from src.campaign_delivery import (
+            build_copybook_documents,
+            build_overview_documents,
+            build_platform_copy_documents,
+            build_posting_plan_documents,
+        )
+
+        runway = None
+        try:
+            from src.campaign_intelligence import load_intelligence
+
+            if state.path is not None:
+                intel = load_intelligence(state.path)
+                if intel is not None and intel.current_runway():
+                    r = intel.current_runway()
+                    runway = f"{r.days.min_days}–{r.days.max_days} days"
+        except Exception:
+            runway = None
+
+        for name, payload in build_overview_documents(state, plan):
+            docs.append((f"{root}/{name}", payload))
+        if state.path is not None:
+            try:
+                from src.campaign_intelligence import newest_brief, resolve_brief_file
+
+                record = newest_brief(state.path)
+                if record is not None:
+                    brief_path = resolve_brief_file(state.path, record)
+                    if brief_path is not None and brief_path.is_file():
+                        docs.append((f"{root}/01 Production Brief.pdf", brief_path))
+            except Exception:
+                briefs = state.path / "production_briefs"
+                if briefs.is_dir():
+                    pdfs = sorted(briefs.glob("*.pdf"), reverse=True)
+                    if pdfs:
+                        docs.append((f"{root}/01 Production Brief.pdf", pdfs[0]))
+        for name, payload in build_posting_plan_documents(state, plan, runway=runway):
+            docs.append((f"{root}/{name}", payload))
+        for name, payload in build_copybook_documents(state, plan):
+            docs.append((f"{root}/{name}", payload))
+        for name, payload in build_platform_copy_documents(state, plan):
+            docs.append((f"{root}/{name}", payload))
+        # Campaign brief markdown stays internal when present
+        if state.package_path and Path(state.package_path).is_file():
+            docs.append(
+                (
+                    f"{root}/BettyOS Data/Campaign Brief.md",
+                    Path(state.package_path),
+                )
+            )
+        return docs
+
+    # Legacy / archive layout
+    overview = _campaign_overview_text(state)
+    docs.append((f"{root}/Campaign Overview.txt", overview))
+
+    if state.path is None:
+        return docs
+
+    try:
+        from src.campaign_intelligence import newest_brief, resolve_brief_file
+
+        record = newest_brief(state.path)
+        if record is not None:
+            brief_path = resolve_brief_file(state.path, record)
+            if brief_path is not None and brief_path.is_file():
+                docs.append((f"{root}/Production Brief.pdf", brief_path))
+    except Exception:
+        briefs = state.path / "production_briefs"
+        if briefs.is_dir():
+            pdfs = sorted(briefs.glob("*.pdf"), reverse=True)
+            if pdfs:
+                docs.append((f"{root}/Production Brief.pdf", pdfs[0]))
+
+    if state.package_path and Path(state.package_path).is_file():
+        docs.append((f"{root}/Campaign Brief.md", Path(state.package_path)))
+
+    return docs
+
+
+def _campaign_overview_text(state: CampaignState) -> str:
+    from src.campaign_delivery import campaign_overview_copy
+
+    lines = [
+        f"Campaign: {state.name}",
+        f"Objective: {state.goal}",
+        f"Stage: {state.stage}",
+        f"Platforms: {', '.join(state.platforms) or '—'}",
+        "",
+        campaign_overview_copy(state),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _humanize_platform_folder(archive_name: str) -> str:
+    """instagram/ → Instagram/ for founder-facing packages."""
+    mapping = {
+        "/instagram/": "/Instagram/",
+        "/pinterest/": "/Pinterest/",
+        "/carousel/": "/Carousel/",
+        "/email/": "/Email/",
+        "/website/": "/Website/",
+        "/waitlist/": "/Website/",
+        "/other/": "/Other/",
+    }
+    result = archive_name
+    for old, new in mapping.items():
+        result = result.replace(old, new)
+    return result
+
+
 def list_existing_packages(state: CampaignState) -> list[tuple[Path, str, str]]:
     """Previously created packages for this campaign: (path, created, size)."""
     folder = exports_dir()
     if not folder.is_dir() or state.path is None:
         return []
     rows: list[tuple[Path, str, str]] = []
-    for path in sorted(folder.glob(f"{state.path.name}*.zip"), reverse=True):
-        stat = path.stat()
-        rows.append(
-            (
-                path,
-                datetime.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y, %H:%M"),
-                human_size(stat.st_size),
+    seen: set[Path] = set()
+    patterns = [
+        f"{state.path.name}*.zip",
+        "*_campaign-delivery_*.zip",
+        "*_publishing*.zip",
+    ]
+    for pattern in patterns:
+        for path in folder.glob(pattern):
+            if path in seen or not path.is_file():
+                continue
+            # Prefer campaign-id prefix; for human names, peek at manifest when needed.
+            if not path.name.startswith(state.path.name):
+                if not _zip_belongs_to_campaign(path, state):
+                    continue
+            seen.add(path)
+            stat = path.stat()
+            rows.append(
+                (
+                    path,
+                    datetime.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y, %H:%M"),
+                    human_size(stat.st_size),
+                )
             )
-        )
+    rows.sort(key=lambda row: row[0].stat().st_mtime, reverse=True)
     return rows
+
+
+def _zip_belongs_to_campaign(path: Path, state: CampaignState) -> bool:
+    try:
+        with zipfile.ZipFile(path) as zf:
+            for name in zf.namelist():
+                if name.endswith("manifest.json") or name.endswith("Manifest.json"):
+                    payload = json.loads(zf.read(name))
+                    campaign_id = (
+                        payload.get("campaign_id")
+                        or payload.get("campaign")
+                        or payload.get("technical", {}).get("campaign_id")
+                    )
+                    if campaign_id and state.path and campaign_id == state.path.name:
+                        return True
+                    if payload.get("campaign_name") == state.name:
+                        return True
+    except (OSError, zipfile.BadZipFile, json.JSONDecodeError, KeyError):
+        return False
+    return False

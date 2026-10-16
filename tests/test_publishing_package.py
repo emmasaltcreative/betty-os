@@ -276,12 +276,23 @@ class PublishingSelectionTests(unittest.TestCase):
         assert result.path is not None
         with zipfile.ZipFile(result.path) as zf:
             names = zf.namelist()
-            self.assertTrue(any(n.endswith("README.txt") for n in names))
+            self.assertTrue(
+                any(n.endswith("README.txt") for n in names)
+                or any("BettyOS Data/package-notes.txt" in n for n in names)
+            )
             self.assertTrue(any(n.endswith("manifest.json") for n in names))
             self.assertFalse(any("/studio/" in n for n in names))
             self.assertFalse(any("/v1/" in n for n in names))
-            readme = next(n for n in names if n.endswith("README.txt"))
-            text = zf.read(readme).decode("utf-8")
+            note_name = next(
+                (
+                    n
+                    for n in names
+                    if n.endswith("README.txt") or n.endswith("package-notes.txt")
+                ),
+                None,
+            )
+            self.assertIsNotNone(note_name)
+            text = zf.read(note_name).decode("utf-8")
             self.assertIn("Included", text)
             self.assertIn("Historical versions remain in BettyOS", text)
             manifest_name = next(n for n in names if n.endswith("manifest.json"))
@@ -436,7 +447,10 @@ class ModeAndRegressionTests(unittest.TestCase):
             assert result.path is not None
             with zipfile.ZipFile(result.path) as zf:
                 names = zf.namelist()
-                self.assertTrue(any(n.endswith("README.txt") for n in names))
+                self.assertTrue(
+                    any(n.endswith("README.txt") for n in names)
+                    or any("BettyOS Data/package-notes.txt" in n for n in names)
+                )
                 self.assertTrue(any(n.endswith("manifest.json") for n in names))
                 reel_files = [n for n in names if n.endswith(".mp4")]
                 self.assertGreaterEqual(len(reel_files), 1)
@@ -450,7 +464,16 @@ class ModeAndRegressionTests(unittest.TestCase):
                 )
                 self.assertEqual(reel_entry["finish_version_id"], "finish_v004")
                 self.assertEqual(reel_entry["parent_render_version_id"], "render_v001")
-                readme = zf.read(next(n for n in names if n.endswith("README.txt"))).decode()
+                readme_name = next(
+                    (
+                        n
+                        for n in names
+                        if n.endswith("README.txt") or n.endswith("package-notes.txt")
+                    ),
+                    None,
+                )
+                self.assertIsNotNone(readme_name)
+                readme = zf.read(readme_name).decode()
                 self.assertIn("Excluded", readme)
                 self.assertIn("Historical versions remain in BettyOS", readme)
 

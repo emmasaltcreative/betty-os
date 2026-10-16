@@ -6,3 +6,4 @@ anthropic
 pillow
 streamlit
 numpy
+reportlab

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "brand_id": "oh_betty_jaletti",
+  "description": "Brand-specific campaign calendar relevance. Novelty holidays that clash with ritual reading identity are excluded.",
+  "included_event_ids": [
+    "valentines_day",
+    "mothers_day",
+    "graduation_season",
+    "summer_travel",
+    "back_to_school",
+    "fall_reading_season",
+    "halloween",
+    "thanksgiving",
+    "black_friday",
+    "cyber_monday",
+    "holiday_gifting",
+    "final_holiday_shipping",
+    "new_year",
+    "national_book_month",
+    "world_book_day"
+  ],
+  "excluded_event_ids": [
+    "national_pizza_day",
+    "national_dog_day",
+    "april_fools",
+    "super_bowl",
+    "st_patricks_day"
+  ],
+  "relevance_weights": {
+    "brand": 1.0,
+    "product": 1.0,
+    "audience": 1.0,
+    "commercial": 0.85
+  },
+  "strong_alignments": {
+    "fall_reading_season": "The Reading Hour ritual and literary identity",
+    "national_book_month": "Bookish ritual and commonplace practice",
+    "world_book_day": "Reading culture without novelty tone",
+    "holiday_gifting": "Heirloom objects as considered gifts when inventory allows",
+    "mothers_day": "Thoughtful gifting when inventory and tone allow"
+  },
+  "weak_or_conditional": {
+    "halloween": "Only if tone stays quiet and literary; avoid costume novelty",
+    "black_friday": "Avoid discount theater; prefer waitlist or first-access framing when inventory is unavailable",
+    "cyber_monday": "Same as Black Friday — no false urgency or fake availability"
+  },
+  "inventory_sensitive_event_ids": [
+    "black_friday",
+    "cyber_monday",
+    "holiday_gifting",
+    "final_holiday_shipping",
+    "valentines_day",
+    "mothers_day"
+  ]
+}

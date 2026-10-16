@@ -13,13 +13,15 @@ import streamlit as st
 from src.common import OUTPUTS_DIR
 
 # Primary navigation — founder destinations only.
+# Insights stays available via deep link / legacy, but is hidden until it has
+# connected campaign performance content.
 NAV_ITEMS: tuple[str, ...] = (
     "Today",
     "Campaigns",
     "Library",
-    "Insights",
     "Settings",
 )
+HIDDEN_NAV_ITEMS: tuple[str, ...] = ("Insights",)
 
 # Contextual destinations (not in the sidebar). Routed by app.py.
 WORKSPACE = "workspace"
@@ -76,6 +78,9 @@ def init_state() -> None:
 
     # Migrate prior default label.
     if st.session_state.get(NAV) == "Home":
+        st.session_state[NAV] = "Today"
+    if st.session_state.get(NAV) == "Insights":
+        # Insights is hidden until connected performance exists.
         st.session_state[NAV] = "Today"
 
     if st.session_state[ACTIVE_CAMPAIGN] is None:
@@ -162,6 +167,7 @@ def goto_workspace(stage: str | None = None, *, piece_id: str | None = None,
     if version_key:
         st.session_state[FOCUS_VERSION] = version_key
         st.session_state["studio_pending_version_key"] = version_key
+    mark_sidebar_for_workspace()
     goto(WORKSPACE, stage=stage)
 
 
@@ -188,6 +194,32 @@ def contextual_page() -> str | None:
 
 def clear_contextual_page() -> None:
     st.session_state["_contextual_page"] = None
+
+
+def sync_sidebar_leaving_workspace(choice: str) -> bool:
+    """If the user picks a sidebar destination while in workspace, leave it.
+
+    Returns True when the contextual workspace should yield to the sidebar page.
+    """
+    contextual = contextual_page()
+    if contextual != WORKSPACE:
+        st.session_state["_last_sidebar_nav"] = choice
+        return False
+    previous = st.session_state.get("_last_sidebar_nav")
+    # First paint after opening workspace: remember the radio value without leaving.
+    if previous is None:
+        st.session_state["_last_sidebar_nav"] = choice
+        return False
+    if choice != previous:
+        clear_contextual_page()
+        st.session_state["_last_sidebar_nav"] = choice
+        return True
+    return False
+
+
+def mark_sidebar_for_workspace() -> None:
+    """Remember the current sidebar selection when entering workspace."""
+    st.session_state["_last_sidebar_nav"] = st.session_state.get(NAV, "Today")
 
 
 def _bare(label: str) -> str:

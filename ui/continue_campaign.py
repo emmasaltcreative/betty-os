@@ -150,6 +150,15 @@ class CampaignContinuation:
 
 def resolve_continuation(state: CampaignState) -> CampaignContinuation:
     """Derive the single next action from persisted campaign state."""
+    from dataclasses import replace
+
+    from src.asset_visibility import filter_user_facing_versions
+
+    if state.versions:
+        filtered = filter_user_facing_versions(state.versions)
+        if len(filtered) != len(state.versions):
+            state = replace(state, versions=filtered)
+
     if not state.exists or state.path is None:
         return _no_campaign()
 

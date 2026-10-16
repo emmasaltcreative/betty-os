@@ -1,0 +1,27 @@
+{
+  "brand_id": "oh_betty_jaletti",
+  "updated_at": "2026-08-06T20:05:47+00:00",
+  "findings": [
+    {
+      "finding_id": "pref_9c0cf52481",
+      "finding": "Avoid persistent logo overlays on OBJ lifestyle reels",
+      "evidence_count": 3,
+      "confidence": "medium",
+      "scope": {
+        "brand": "oh_betty_jaletti",
+        "content_type": "lifestyle_reel"
+      },
+      "created_at": "2026-08-06T19:45:04+00:00",
+      "updated_at": "2026-08-06T20:05:47+00:00",
+      "active": true,
+      "brand_id": "oh_betty_jaletti",
+      "statement": "Avoid persistent logo overlays on OBJ lifestyle reels",
+      "context": "",
+      "evidence_keys": [
+        "evt_0936b4bdd802"
+      ],
+      "status": "promoted",
+      "source": "approval_events"
+    }
+  ]
+}
