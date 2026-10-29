@@ -48,7 +48,9 @@ STAGE_KEYS = {label: key for key, label in WORKSPACE_STAGES}
 KEY_TO_LABEL = {key: label for key, label in WORKSPACE_STAGES}
 
 # Widget-backed key must stay distinct from internal workflow / pending navigation keys.
-STAGE_WIDGET_KEY = "workspace_stage_selector"
+# STAGE_SELECTOR_KEY is the origin/main name for the same selector widget.
+STAGE_SELECTOR_KEY = "workspace_stage_selector"
+STAGE_WIDGET_KEY = STAGE_SELECTOR_KEY
 STAGE_STATE_KEY = "workspace_stage"
 
 
@@ -73,6 +75,30 @@ def _sync_stage_before_widget(default_label: str) -> str:
     if st.session_state.get(STAGE_WIDGET_KEY) not in STAGE_OPTIONS:
         st.session_state[STAGE_WIDGET_KEY] = current
     return current
+
+
+def prepare_workspace_stage_selector(current_stage: str) -> str:
+    """Resolve and bind the stage selector before the widget exists.
+
+    Returns the selected stage label (e.g. ``Decide``). Safe to call from tests
+    with a patched ``st.session_state``.
+
+    Pending navigation is written onto the selector key first. ``step_selector``
+    then instantiates the widget. Nothing may write ``STAGE_SELECTOR_KEY`` after
+    that call — Streamlit raises if a widget key changes after instantiation.
+
+    The guided workspace does not show this control. It binds the same keys in
+    ``_sync_stage_before_widget`` and keeps stage changes on ``STAGE_STATE_KEY``.
+    """
+    default_label = KEY_TO_LABEL.get(current_stage, "Plan")
+    pending = nav.take_pending_stage(STAGE_OPTIONS)
+    if pending is not None:
+        st.session_state[STAGE_SELECTOR_KEY] = pending
+    elif st.session_state.get(STAGE_SELECTOR_KEY) not in STAGE_OPTIONS:
+        st.session_state[STAGE_SELECTOR_KEY] = default_label
+
+    # Widget instantiation — no further writes to STAGE_SELECTOR_KEY after this.
+    return nav.step_selector("Stage", STAGE_OPTIONS, key=STAGE_SELECTOR_KEY)
 
 
 def render(state: CampaignState) -> None:
@@ -102,17 +128,18 @@ def render(state: CampaignState) -> None:
             st.session_state[nav.FOCUS_VERSION] = interrupted["version_key"]
 
     default_label = KEY_TO_LABEL.get(continuation.current_stage, "Plan")
+    # Pending stage must be applied before any stage widget is created.
+    # Writing the selector key after instantiation raises StreamlitAPIException.
     _sync_stage_before_widget(default_label)
-    # Stage is driven by deep links / continuation — not a second permanent menu.
+    # Guided workspace: stage follows deep links and continuation, not a second menu.
     selected = st.session_state.get(STAGE_WIDGET_KEY) or st.session_state.get(
         STAGE_STATE_KEY, default_label
     )
     if selected not in STAGE_OPTIONS:
         selected = default_label
-        st.session_state[STAGE_STATE_KEY] = selected
-        st.session_state[STAGE_WIDGET_KEY] = selected
-    else:
-        st.session_state[STAGE_STATE_KEY] = selected
+    # Internal workflow key only. Never write STAGE_WIDGET_KEY / STAGE_SELECTOR_KEY
+    # after sync — origin/main's selector owns that key once the widget exists.
+    st.session_state[STAGE_STATE_KEY] = selected
 
     stage_key = STAGE_KEYS.get(selected, continuation.current_stage)
     nav.persist_workspace_context(state.path, stage=stage_key)

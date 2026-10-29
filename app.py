@@ -13,7 +13,7 @@ from ui import nav
 from ui.campaign_state import build_campaign_state
 from ui.components import brand_mark_svg, inject_theme, quiet
 from ui.continue_campaign import resolve_continuation
-from ui.screens import campaigns, library, settings, today, workspace
+from ui.screens import campaigns, library, pin_studio, settings, today, video_studio, workspace
 from ui.status import Status
 
 
@@ -174,6 +174,10 @@ def main() -> None:
         campaigns.render(state)
     elif page == "Library":
         library.render()
+    elif page == "Pin Studio":
+        pin_studio.render()
+    elif page == "Video Studio":
+        video_studio.render()
     elif page == "Insights":
         # Hidden from NAV_ITEMS; keep route for legacy deep links.
         from ui.screens import insights

@@ -19,6 +19,8 @@ NAV_ITEMS: tuple[str, ...] = (
     "Today",
     "Campaigns",
     "Library",
+    "Pin Studio",
+    "Video Studio",
     "Settings",
 )
 HIDDEN_NAV_ITEMS: tuple[str, ...] = ("Insights",)

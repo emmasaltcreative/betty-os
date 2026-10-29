@@ -115,8 +115,12 @@ class NavDestinationTests(unittest.TestCase):
     def test_visible_nav_items(self) -> None:
         from ui import nav
 
-        self.assertEqual(list(nav.NAV_ITEMS), ["Today", "Campaigns", "Library", "Settings"])
+        self.assertEqual(
+            list(nav.NAV_ITEMS),
+            ["Today", "Campaigns", "Library", "Pin Studio", "Video Studio", "Settings"],
+        )
         self.assertNotIn("Insights", nav.NAV_ITEMS)
+        self.assertIn("Insights", nav.HIDDEN_NAV_ITEMS)
 
     def test_sidebar_leaving_workspace(self) -> None:
         from ui import nav
