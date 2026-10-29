@@ -13,7 +13,7 @@ from ui import nav
 from ui.campaign_state import build_campaign_state
 from ui.components import inject_theme, quiet
 from ui.continue_campaign import resolve_continuation
-from ui.screens import campaigns, insights, library, pin_studio, settings, today, workspace
+from ui.screens import campaigns, insights, library, pin_studio, video_studio, settings, today, workspace
 from ui.status import Status
 
 
@@ -91,6 +91,8 @@ def main() -> None:
         library.render()
     elif page == "Pin Studio":
         pin_studio.render()
+    elif page == "Video Studio":
+        video_studio.render()
     elif page == "Insights":
         insights.render()
     else:
