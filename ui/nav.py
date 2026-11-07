@@ -25,8 +25,12 @@ NAV_ITEMS: tuple[str, ...] = (
 
 # Contextual destinations (not in the sidebar). Routed by app.py.
 WORKSPACE = "workspace"
+ILLUSTRATION_STUDIO = "illustration_studio"
 CONTEXTUAL_DESTINATIONS: tuple[str, ...] = (
     WORKSPACE,
+    # Illustration Studio is reached from Create and Library, deliberately not
+    # added to the primary sidebar (Experience 2 keeps that list minimal).
+    ILLUSTRATION_STUDIO,
     # Legacy aliases kept so older deep links and tests keep working.
     "Home",
     "Create",
@@ -111,6 +115,8 @@ def _apply_pending_destination() -> None:
             st.session_state["_contextual_page"] = None
         elif requested == WORKSPACE:
             st.session_state["_contextual_page"] = WORKSPACE
+        elif requested == ILLUSTRATION_STUDIO:
+            st.session_state["_contextual_page"] = ILLUSTRATION_STUDIO
     st.session_state[PENDING_NAV] = None
 
 
@@ -306,3 +312,10 @@ def _restore_persisted_context(campaign_dir: Path) -> None:
         st.session_state[INTERRUPTED_FLOW] = data.get("interrupted_flow")
     if data.get("stage") and not st.session_state.get(PENDING_STAGE):
         st.session_state[PENDING_STAGE] = data.get("stage")
+
+
+def goto_illustration_studio(*, version_id: str | None = None) -> None:
+    """Open the Illustration Studio from Create, Library or a campaign."""
+    if version_id:
+        st.session_state["illustration_focus_version"] = version_id
+    goto(ILLUSTRATION_STUDIO)

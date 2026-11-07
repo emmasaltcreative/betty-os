@@ -1,0 +1,69 @@
+{
+  "products_version": 1,
+  "products": [
+    {
+      "product_id": "a_woman_remembered_10ml",
+      "display_name": "A Woman Remembered 10 mL",
+      "size": "10 mL",
+      "form_factor": "cylindrical travel atomizer / rollerball hybrid",
+      "glass_color": "amber",
+      "hardware_finish": "gold",
+      "hardware_both_ends": true,
+      "mechanisms": [
+        "spray atomizer at one end",
+        "rollerball at the other end"
+      ],
+      "label": {
+        "transparent": true,
+        "ghost_motif_opacity": 0.5,
+        "title_color": "#FFFFFF",
+        "subtitle_color": "#FFFFFF",
+        "mark_color": "#C9A227",
+        "signature_color": "#C9A227",
+        "signature_below_edp": true,
+        "copy_orientation": "lengthwise",
+        "title_text": "A Woman Remembered",
+        "subtitle_lines": [
+          "EAU DE PARFUM",
+          "10 mL"
+        ],
+        "notes_line": null,
+        "label_art_asset_id": null,
+        "ghost_motif_color": "#C9A227",
+        "ghost_tile_ratio": 0.17
+      },
+      "botanicals": [
+        "Iris pallida (pale lavender)",
+        "rose (soft blush)",
+        "jasmine",
+        "pear (ripe, or pear slice)"
+      ],
+      "prohibited_substitutions": [
+        "gardenia",
+        "generic hydrangeas",
+        "changing the dual-function hardware",
+        "changing bottle proportions or colour",
+        "a printed notes line the approved label does not have",
+        "stretching the house mark out of its aspect ratio"
+      ],
+      "immutable_facts": [
+        "Amber glass must show through the label's negative space.",
+        "Gold-finished hardware is visible at BOTH ends in closed PDP imagery.",
+        "The repeating four-petal house mark sits behind the text at approximately 50% opacity.",
+        "Primary title, EAU DE PARFUM and 10 mL are white.",
+        "The primary flower logo and the handwritten full house signature are gold.",
+        "The official signature sits below the eau de parfum / size text.",
+        "Copy runs lengthwise along the cylinder, not across its diameter or around its circumference.",
+        "Scent-context botanicals support the characters and product; they never dominate."
+      ],
+      "mockup_asset_ids": [],
+      "spec_verified": false,
+      "unverified_fields": [
+        "exact bottle dimensions",
+        "production components",
+        "label print file",
+        "current product mockup"
+      ]
+    }
+  ]
+}

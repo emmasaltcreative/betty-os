@@ -1,0 +1,99 @@
+{
+  "templates_version": 1,
+  "templates": [
+    {
+      "template_id": "bettys_together_pdp",
+      "display_name": "A Woman Remembered - Five Bettys Collage",
+      "is_default": true,
+      "canvas": "shopify_pdp_square",
+      "character_ids": ["young_betty", "present_betty", "timeless_betty", "golden_betty", "betty_remembered"],
+      "product_id": "a_woman_remembered_10ml",
+      "product_verification_policy": "require_mockup_or_flag",
+      "mood": "cream editorial ground, painterly fine-line texture, cool-neutral",
+      "palette": ["soft sage", "ivory", "dark navy", "coffee brown", "subtle gold"],
+      "composition_zones": [
+        "all five Bettys arranged in visually balanced layers",
+        "perfume near foreground"
+      ],
+      "prompt_blocks": [
+        "A square character-and-product illustration on cream editorial ground.",
+        "All five Bettys arranged in visually balanced layers; perfume near the foreground.",
+        "Accurate amber cylinder with gold hardware at both ends; the transparent real label read lengthwise.",
+        "Iris pallida, blush rose, jasmine and pear.",
+        "Soft sage and ivory, cool enough to belong on the current site; painterly fine-line texture, not monochrome sepia."
+      ],
+      "prohibited_substitutions": ["monochrome sepia treatment", "gardenia", "heavy aged-paper effect"],
+      "reference_notes": "Anchor on the last explicitly approved botanical five-Betty collage."
+    },
+    {
+      "template_id": "individual_betty_vignette",
+      "display_name": "Individual Betty PDP Vignette",
+      "is_default": false,
+      "canvas": "shopify_pdp_square",
+      "character_ids": ["timeless_betty"],
+      "product_id": null,
+      "product_verification_policy": "require_mockup_or_flag",
+      "mood": "quiet, generous breathing room",
+      "palette": ["ivory", "jade", "espresso"],
+      "composition_zones": ["one character", "one small ritual", "limited background"],
+      "prompt_blocks": [
+        "One Betty and one small ritual.",
+        "Limited background, no heavy borders, ample breathing room."
+      ],
+      "prohibited_substitutions": ["heavy decorative borders", "floral clutter"],
+      "reference_notes": "Good for Brownstone Tote, Scented Letter, Reading Hour and fragrance."
+    },
+    {
+      "template_id": "bettys_through_the_ages",
+      "display_name": "Bettys Through the Ages - Lineup",
+      "is_default": false,
+      "canvas": "editorial_wide",
+      "character_ids": ["young_betty", "present_betty", "timeless_betty", "golden_betty", "betty_remembered"],
+      "product_id": null,
+      "product_verification_policy": "editorial_only",
+      "mood": "editorial storytelling",
+      "palette": ["ivory", "navy", "silver"],
+      "composition_zones": ["five recognizable chapters in a row with linked features"],
+      "prompt_blocks": [
+        "Five recognizable chapters of one woman, with linked shared features and distinct ages and outfits."
+      ],
+      "prohibited_substitutions": ["baked-in labels or copy - keep these as separate web typography layers"],
+      "reference_notes": "Editorial storytelling, NOT a product specification image."
+    },
+    {
+      "template_id": "house_ritual_scented_letter",
+      "display_name": "House Ritual - Scented Letter",
+      "is_default": false,
+      "canvas": "pdp_portrait",
+      "character_ids": ["golden_betty"],
+      "product_id": null,
+      "product_verification_policy": "require_mockup_or_flag",
+      "mood": "intimate writing desk",
+      "palette": ["cream", "jade", "espresso", "gold"],
+      "composition_zones": ["cream letter", "jade wax seal with exact flower emboss", "writing desk"],
+      "prompt_blocks": [
+        "Golden Betty or Betty Remembered depending on the story; a cream letter, a jade wax seal with the exact flower emboss, a writing desk, an understated scent gesture."
+      ],
+      "prohibited_substitutions": ["a full commercial perfume bottle - the letter is not one"],
+      "reference_notes": "Choose the character by story; never swap the Golden and Remembered inspirations."
+    },
+    {
+      "template_id": "brownstone_tote_present_betty",
+      "display_name": "The Brownstone Tote - Present Betty",
+      "is_default": false,
+      "canvas": "shopify_pdp_square",
+      "character_ids": ["present_betty"],
+      "product_id": null,
+      "product_verification_policy": "require_mockup_or_flag",
+      "mood": "contemporary brownstone / coffee / bookstore atmosphere",
+      "palette": ["navy", "coffee brown", "cream"],
+      "composition_zones": ["Present Betty with the tote", "brownstone or bookstore backdrop"],
+      "prompt_blocks": [
+        "Present Betty in a navy crewneck, wide-leg denim and square black glasses.",
+        "A brown slouchy faux-suede tote sized and stitched according to its product reference, with the correctly patterned silk scarf."
+      ],
+      "prohibited_substitutions": ["an invented tote shape or stitching", "an unrelated scarf pattern"],
+      "reference_notes": "Requires the tote product reference for size and stitching."
+    }
+  ]
+}

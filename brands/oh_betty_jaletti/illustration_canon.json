@@ -1,0 +1,89 @@
+{
+  "canon_version": 1,
+  "note": "One composite muse, five expressions. The same Betty is a composite of Emma and both of her grandmothers - NOT five unrelated women and NOT separate literal portraits of each relative. Names are conceptual roles; they never override approved individual reference images.",
+  "shared_features": [
+    "shared expressive light eyes",
+    "defined brows",
+    "softened yet distinct facial structure",
+    "knowing smile",
+    "brunette curls or bob becoming silver with age",
+    "wit, grace, and interior life"
+  ],
+  "characters": [
+    {
+      "character_id": "young_betty",
+      "display_name": "Young Betty",
+      "inspiration": "the two grandmothers imagined in their thirties",
+      "description": "The women they were before Emma knew them: spirited, elegant, capable, curious.",
+      "shared_features": [],
+      "distinct_features": ["youthful brunette styling"],
+      "wardrobe_notes": "Time-period clothes may reflect their youth without becoming a costume.",
+      "signature_props": [],
+      "prohibited": ["costume-drama styling", "fancy-dress pastiche"],
+      "anchor_asset_ids": []
+    },
+    {
+      "character_id": "present_betty",
+      "display_name": "Present Betty",
+      "inspiration": "Emma in the present",
+      "description": "Approachable and purposeful; the modern, busy creative-life chapter.",
+      "shared_features": [],
+      "distinct_features": [
+        "short brunette bob",
+        "pale expressive doe eyes",
+        "oversized square black glasses"
+      ],
+      "wardrobe_notes": "Modern navy crewneck and wide-leg denim when suitable.",
+      "signature_props": [],
+      "prohibited": ["omitting the square black glasses"],
+      "anchor_asset_ids": []
+    },
+    {
+      "character_id": "timeless_betty",
+      "display_name": "Timeless Betty",
+      "inspiration": "the throughline across all seasons and ages",
+      "description": "Not a fixed age. She bridges memories, objects, collections and generations.",
+      "shared_features": [],
+      "distinct_features": ["age-ambiguous"],
+      "wardrobe_notes": "Signature four-petal house-logo scarf on this character when used.",
+      "signature_props": ["four-petal house-logo scarf"],
+      "prohibited": [
+        "substituting unrelated clovers or flowers for the four-petal house mark"
+      ],
+      "anchor_asset_ids": []
+    },
+    {
+      "character_id": "golden_betty",
+      "display_name": "Golden Betty",
+      "inspiration": "Emma's living paternal grandmother, who still actively inspires the house",
+      "description": "A stylish older woman with real laughter, confidence, self-possession and wit; in the approved concept, a playful wink.",
+      "shared_features": [],
+      "distinct_features": ["silver hair", "playful wink"],
+      "wardrobe_notes": "Stylish and self-possessed.",
+      "signature_props": [],
+      "prohibited": ["elderly stereotype", "frail or diminished framing"],
+      "anchor_asset_ids": []
+    },
+    {
+      "character_id": "betty_remembered",
+      "display_name": "Betty Remembered",
+      "inspiration": "Emma's late maternal grandmother, who lived to 90 and remains a loving presence",
+      "description": "Warm, gentle, wise, emotionally present. May be evoked through a note, keepsake, photograph, memory, or a distinct illustrated presence.",
+      "shared_features": [],
+      "distinct_features": ["silver hair", "gentle, dignified expression"],
+      "wardrobe_notes": "Soft and warm.",
+      "signature_props": ["note paper", "keepsake", "photograph"],
+      "prohibited": [
+        "crossed-eye artifact - maintain normal aligned eyes",
+        "undignified or caricatured expression"
+      ],
+      "anchor_asset_ids": []
+    }
+  ],
+  "group_rules": [
+    "When all five appear, explicitly describe different ages, distinct outfits, placement, consistent shared features and identity roles.",
+    "Never silently switch the Golden and Remembered inspirations.",
+    "Always include a chosen character reference in generation or revision.",
+    "Character consistency is as important as style consistency."
+  ]
+}

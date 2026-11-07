@@ -13,7 +13,17 @@ from ui import nav
 from ui.campaign_state import build_campaign_state
 from ui.components import inject_theme, quiet
 from ui.continue_campaign import resolve_continuation
-from ui.screens import campaigns, insights, library, pin_studio, video_studio, settings, today, workspace
+from ui.screens import (
+    campaigns,
+    illustration_studio,
+    insights,
+    library,
+    pin_studio,
+    settings,
+    today,
+    video_studio,
+    workspace,
+)
 from ui.status import Status
 
 
@@ -79,6 +89,10 @@ def main() -> None:
     if contextual == nav.WORKSPACE:
         _sidebar(state)
         workspace.render(state)
+        return
+    if contextual == nav.ILLUSTRATION_STUDIO:
+        _sidebar(state)
+        illustration_studio.render()
         return
 
     page = _sidebar(state)

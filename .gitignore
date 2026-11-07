@@ -15,3 +15,12 @@ outputs/*
 library/thumbnails/*
 !library/thumbnails/.gitkeep
 outputs/.review_frames/
+
+# --- Illustration Studio: private data root ---
+# Binary originals, family/inspiration references, proprietary product masters
+# and generated illustration bytes. Never commit these to a public repo.
+.betty_data/
+# Brand-asset uploads land under brands/<id>/studio/assets/ at runtime.
+# Keep already-tracked seed art, but never auto-commit new private uploads.
+brands/*/studio/assets/*
+!brands/*/studio/assets/.gitkeep

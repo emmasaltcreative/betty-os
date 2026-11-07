@@ -42,6 +42,9 @@ def render(state: CampaignState) -> None:
     page_header("Create", "Turn each content piece into a finished render.")
     progress_rail(state.steps)
 
+    if st.button("Illustration Studio", key="create_illustration_studio"):
+        nav.goto_illustration_studio()
+
     if not state.exists:
         empty_state("No campaign selected", "Open a campaign before creating renders.")
         if st.button("Go to Campaigns", type="primary"):

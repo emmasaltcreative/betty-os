@@ -83,6 +83,14 @@ def render() -> None:
                     version_key=interrupted.get("version_key"),
                 )
 
+    with st.container(border=True):
+        quiet(
+            "Illustration Studio — create Betty illustrations and PDP artwork "
+            "from your saved Brand Asset Vault."
+        )
+        if st.button("Open Illustration Studio", key="lib_illustration_studio"):
+            nav.goto_illustration_studio()
+
     assets_tab, brand_setup_tab, templates_tab, brand_tab, rules_tab = st.tabs(
         ["Assets", "Brand Setup", "Templates", "Brand Guide", "Production Rules"]
     )
