@@ -321,6 +321,89 @@ def import_asset(
     return saved
 
 
+def _read_manifest(zf: zipfile.ZipFile, members: list) -> dict[str, dict]:
+    import json
+
+    manifest: dict[str, dict] = {}
+    for member in members:
+        if Path(member.filename).name.lower() != "manifest.json":
+            continue
+        try:
+            payload = json.loads(zf.read(member).decode("utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        for entry in payload.get("assets") or []:
+            if isinstance(entry, dict) and entry.get("path"):
+                manifest[str(entry["path"]).strip("/")] = entry
+    return manifest
+
+
+def _classify_member(name: str, size: int) -> tuple[bool, str]:
+    """Shared gate for a dry run and the real import."""
+    base = Path(name).name
+    if base.lower() == "manifest.json":
+        return False, "manifest"
+    if name.startswith("/") or ".." in Path(name).parts:
+        return False, "unsafe archive path"
+    if Path(base).suffix.lower() not in ALLOWED_SUFFIXES:
+        return False, "unsupported file type"
+    if size > MAX_FILE_BYTES:
+        return False, "file too large"
+    return True, ""
+
+
+def inspect_zip(
+    archive: Path,
+    *,
+    brand_id: str = DEFAULT_BRAND_ID,
+    default_category: str = "style_anchors",
+) -> dict[str, Any]:
+    """Dry run: what a starter pack would import, without writing anything."""
+    archive = Path(archive)
+    if not archive.is_file():
+        raise VaultError("Archive is not readable.")
+
+    planned: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    with zipfile.ZipFile(archive) as zf:
+        members = [m for m in zf.infolist() if not m.is_dir()]
+        if len(members) > MAX_ZIP_ENTRIES:
+            raise VaultError(
+                f"Archive has {len(members)} files; the limit is {MAX_ZIP_ENTRIES}."
+            )
+        manifest = _read_manifest(zf, members)
+        described = set(manifest)
+        for member in members:
+            ok, reason = _classify_member(member.filename, member.file_size)
+            if not ok:
+                if reason != "manifest":
+                    skipped.append({"path": member.filename, "reason": reason})
+                continue
+            meta = manifest.get(member.filename.strip("/"), {})
+            planned.append(
+                {
+                    "path": member.filename,
+                    "bytes": member.file_size,
+                    "category": str(meta.get("category") or default_category),
+                    "state": str(meta.get("state") or "draft"),
+                    "roles": list(meta.get("roles") or []),
+                    "tags": list(meta.get("tags") or []),
+                    "character_ids": list(meta.get("character_ids") or []),
+                    "product_ids": list(meta.get("product_ids") or []),
+                    "in_manifest": member.filename.strip("/") in manifest,
+                }
+            )
+    return {
+        "planned": planned,
+        "skipped": skipped,
+        "manifest_entries": len(described),
+        "undescribed": [p["path"] for p in planned if not p["in_manifest"]],
+        "manifest_paths_not_in_zip": sorted(
+            described - {p["path"].strip("/") for p in planned}
+        ),
+    }
+
+
 def import_zip(
     archive: Path,
     *,
@@ -357,33 +440,15 @@ def import_zip(
                     f"{MAX_ZIP_UNCOMPRESSED_BYTES // 1_048_576} MB."
                 )
 
-            manifest: dict[str, dict] = {}
-            for member in members:
-                if Path(member.filename).name.lower() == "manifest.json":
-                    import json
-
-                    try:
-                        payload = json.loads(zf.read(member).decode("utf-8"))
-                    except Exception:  # noqa: BLE001
-                        continue
-                    for entry in payload.get("assets") or []:
-                        if isinstance(entry, dict) and entry.get("path"):
-                            manifest[str(entry["path"]).strip("/")] = entry
+            manifest = _read_manifest(zf, members)
 
             for member in members:
                 name = member.filename
                 base = Path(name).name
-                if base.lower() == "manifest.json":
-                    continue
-                # Reject traversal and absolute members outright.
-                if name.startswith("/") or ".." in Path(name).parts:
-                    skipped.append({"path": name, "reason": "unsafe archive path"})
-                    continue
-                if Path(base).suffix.lower() not in ALLOWED_SUFFIXES:
-                    skipped.append({"path": name, "reason": "unsupported file type"})
-                    continue
-                if member.file_size > MAX_FILE_BYTES:
-                    skipped.append({"path": name, "reason": "file too large"})
+                ok, reason = _classify_member(name, member.file_size)
+                if not ok:
+                    if reason != "manifest":
+                        skipped.append({"path": name, "reason": reason})
                     continue
 
                 target = staging / sanitize_filename(base)

@@ -23,7 +23,7 @@ from ui.components import (
     quiet,
     section,
 )
-from illustration import canon, compositor, service, vault, versions
+from illustration import canon, compositor, review_bridge, service, vault, versions
 from illustration.models import (
     CHARACTER_LABELS,
     REFERENCE_ROLES,
@@ -168,7 +168,51 @@ def _zip_form() -> None:
         "Category for files the manifest does not name",
         VAULT_CATEGORIES, key="ill_zip_cat",
     )
-    if st.button("Import archive", key="ill_zip_import"):
+    st.caption(
+        "A `manifest.json` at the archive root assigns category, state, roles "
+        "and tags per file — see "
+        "`brands/oh_betty_jaletti/starter_pack_manifest.template.json`. "
+        "Files it does not name still import, using the default category below."
+    )
+    columns = st.columns(2)
+
+    if columns[0].button("Preview (no changes)", key="ill_zip_preview"):
+        if archive is None:
+            st.error("Choose a ZIP first.")
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            staged = Path(tmp) / archive.name
+            staged.write_bytes(archive.getbuffer())
+            try:
+                report = vault.inspect_zip(
+                    staged, brand_id=BRAND_ID, default_category=default_category
+                )
+            except vault.VaultError as exc:
+                st.error(str(exc))
+                return
+        st.write(f"**{len(report['planned'])} file(s) would import.**")
+        for row in report["planned"]:
+            flag = "" if row["in_manifest"] else " · ⚠ not in manifest"
+            st.markdown(
+                f"- `{row['path']}` → **{row['category']}** / {row['state']}"
+                f"{flag}"
+            )
+        if report["skipped"]:
+            st.warning(
+                "Skipped:\n"
+                + "\n".join(
+                    f"- `{s['path']}` — {s['reason']}" for s in report["skipped"]
+                )
+            )
+        if report["manifest_paths_not_in_zip"]:
+            st.error(
+                "The manifest names files that are not in the archive:\n"
+                + "\n".join(
+                    f"- `{p}`" for p in report["manifest_paths_not_in_zip"]
+                )
+            )
+
+    if columns[1].button("Import archive", type="primary", key="ill_zip_import"):
         if archive is None:
             st.error("Choose a ZIP first.")
             return
@@ -433,18 +477,47 @@ def _version_detail(version) -> None:
         st.success("Exported.")
         st.rerun()
 
-    product_accurate = controls[1].checkbox(
-        "Product-accurate", key=f"acc_{version.version_id}",
-        help="Only with a verified current mockup attached.",
-    )
-    if controls[2].button("Approve", key=f"app_{version.version_id}"):
-        versions.approve(
-            version.version_id, BRAND_ID, product_accurate=product_accurate
+    campaign_dir = nav.active_campaign_path()
+    if controls[1].button(
+        "Send to Review", key=f"rev2_{version.version_id}",
+        disabled=campaign_dir is None,
+        help="Publishes the exported files into the active campaign and queues "
+             "them in Approvals."
+             if campaign_dir
+             else "Open a campaign to send illustrations to Review.",
+    ):
+        try:
+            result = review_bridge.send_to_review(
+                version.version_id, campaign_dir, brand_id=BRAND_ID
+            )
+        except review_bridge.ReviewBridgeError as exc:
+            st.error(str(exc))
+            return
+        st.success(
+            f"Published {len(result['published'])} file(s) to "
+            f"{Path(result['campaign_dir']).name} and queued for review."
         )
-        service.run_qa(version.version_id, brand_id=BRAND_ID)
         st.rerun()
-    if controls[3].button("Reject", key=f"rej_{version.version_id}"):
-        versions.reject(version.version_id, BRAND_ID)
+
+    product_accurate = controls[2].checkbox(
+        "Product-accurate", key=f"acc_{version.version_id}",
+        help="Only honoured with a verified current mockup attached.",
+    )
+    decision = controls[3].selectbox(
+        "Decision", ["approved", "needs_revision", "rejected"],
+        key=f"dec_{version.version_id}",
+    )
+    if st.button("Record decision", key=f"app_{version.version_id}"):
+        result = review_bridge.set_approval(
+            version.version_id, decision, campaign_dir=campaign_dir,
+            brand_id=BRAND_ID, product_accurate=product_accurate,
+        )
+        if result["accuracy_refused"]:
+            st.warning(
+                "Product-accurate was not applied: this product profile is "
+                "still unverified. Attach an approved current mockup first."
+            )
+        st.success(f"Recorded {decision}.")
         st.rerun()
 
     if version.export_paths:

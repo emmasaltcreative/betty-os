@@ -1,0 +1,126 @@
+{
+  "_comment": [
+    "Template for the manifest.json inside a Betty OS starter-pack ZIP.",
+    "Place this file at the archive root. 'path' is the member path inside the",
+    "ZIP, exactly as stored. Any file not described here still imports, using",
+    "the default category chosen in the UI, so the manifest is optional but",
+    "strongly preferred: it is what assigns locked status to official marks.",
+    "Import with Library > Illustration Studio > Brand Asset Vault >",
+    "'Bootstrap from a starter-pack ZIP'. Nothing here is committed to git -",
+    "binaries land under BETTY_OS_DATA_DIR."
+  ],
+  "_categories": [
+    "official_marks", "character_masters", "style_anchors", "product_truth",
+    "botanical", "scene_elements", "templates", "finished_works"
+  ],
+  "_roles": [
+    "mark_source", "character_reference", "style_only",
+    "composition_reference", "product_reference"
+  ],
+  "_states": ["locked", "approved", "draft", "rejected", "unverified"],
+  "assets": [
+    {
+      "path": "marks/obj-house-flower.svg",
+      "category": "official_marks",
+      "state": "locked",
+      "roles": ["mark_source"],
+      "display_name": "House four-petal flower",
+      "tags": ["quatrefoil", "flower"],
+      "is_private": false,
+      "license_note": "Oh Betty Jaletti house mark - exact source artwork"
+    },
+    {
+      "path": "marks/obj-signature.svg",
+      "category": "official_marks",
+      "state": "locked",
+      "roles": ["mark_source"],
+      "display_name": "Oh Betty Jaletti handwritten signature",
+      "tags": ["signature", "wordmark"],
+      "is_private": false
+    },
+    {
+      "path": "marks/obj-seal.svg",
+      "category": "official_marks",
+      "state": "locked",
+      "roles": ["mark_source"],
+      "display_name": "Jade wax seal imprint",
+      "tags": ["seal", "emboss"],
+      "is_private": false
+    },
+    {
+      "path": "product/a-woman-remembered-label.svg",
+      "category": "product_truth",
+      "state": "locked",
+      "roles": ["mark_source", "product_reference"],
+      "display_name": "A Woman Remembered 10 mL label print art",
+      "tags": ["label", "print_art"],
+      "product_ids": ["a_woman_remembered_10ml"],
+      "is_private": true,
+      "license_note": "Proprietary print file - never commit"
+    },
+    {
+      "path": "product/a-woman-remembered-mockup-front.png",
+      "category": "product_truth",
+      "state": "approved",
+      "roles": ["product_reference"],
+      "display_name": "A Woman Remembered 10 mL - front mockup",
+      "tags": ["mockup", "front", "amber", "gold_ends"],
+      "product_ids": ["a_woman_remembered_10ml"],
+      "is_private": true
+    },
+    {
+      "path": "characters/bettys-lineage-board.png",
+      "category": "character_masters",
+      "state": "approved",
+      "roles": ["character_reference", "composition_reference"],
+      "display_name": "Approved five-Betty family lineage board",
+      "tags": ["lineup", "family"],
+      "character_ids": [
+        "young_betty", "present_betty", "timeless_betty",
+        "golden_betty", "betty_remembered"
+      ],
+      "is_private": true
+    },
+    {
+      "path": "characters/golden-betty-anchor.png",
+      "category": "character_masters",
+      "state": "approved",
+      "roles": ["character_reference"],
+      "display_name": "Golden Betty face anchor",
+      "tags": ["face_anchor", "wink"],
+      "character_ids": ["golden_betty"],
+      "is_private": true,
+      "license_note": "Inspired by the living paternal grandmother - reference, not a photograph"
+    },
+    {
+      "path": "style/a-woman-remembered-collage.png",
+      "category": "style_anchors",
+      "state": "approved",
+      "roles": ["style_only", "composition_reference"],
+      "display_name": "A Woman Remembered - approved botanical five-Betty collage",
+      "tags": ["five_bettys", "editorial", "square"],
+      "reference_priority": 10,
+      "is_private": true
+    },
+    {
+      "path": "botanical/iris-pallida.png",
+      "category": "botanical",
+      "state": "approved",
+      "roles": ["style_only"],
+      "display_name": "Iris pallida",
+      "tags": ["iris", "pale_lavender"],
+      "botanical_names": ["Iris pallida"],
+      "is_private": false
+    },
+    {
+      "path": "scene/scarf-repeat-tile.png",
+      "category": "scene_elements",
+      "state": "approved",
+      "roles": ["style_only"],
+      "display_name": "Four-petal scarf repeat tile",
+      "tags": ["scarf", "repeat", "silk"],
+      "character_ids": ["timeless_betty"],
+      "is_private": false
+    }
+  ]
+}

@@ -238,3 +238,80 @@ class PrecedenceTests(VaultTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DryRunTests(VaultTestCase):
+    def _pack(self) -> Path:
+        archive = self.src / "pack.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("marks/flower.svg", QUATREFOIL_SVG)
+            zf.writestr("marks/signature.svg", SIGNATURE_SVG)
+            zf.writestr("readme.txt", "notes")
+            zf.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "path": "marks/flower.svg",
+                                "category": "official_marks",
+                                "state": "locked",
+                                "roles": ["mark_source"],
+                                "tags": ["quatrefoil"],
+                            },
+                            {"path": "missing/ghost.png", "category": "botanical"},
+                        ]
+                    }
+                ),
+            )
+        return archive
+
+    def test_dry_run_writes_nothing(self) -> None:
+        from illustration import vault
+
+        before = len(vault.list_assets())
+        vault.inspect_zip(self._pack())
+        self.assertEqual(len(vault.list_assets()), before)
+
+    def test_dry_run_reports_what_would_happen(self) -> None:
+        from illustration import vault
+
+        report = vault.inspect_zip(self._pack())
+        paths = {p["path"]: p for p in report["planned"]}
+
+        self.assertIn("marks/flower.svg", paths)
+        self.assertEqual(paths["marks/flower.svg"]["state"], "locked")
+        self.assertTrue(paths["marks/flower.svg"]["in_manifest"])
+        self.assertFalse(paths["marks/signature.svg"]["in_manifest"])
+        self.assertIn("marks/signature.svg", report["undescribed"])
+        self.assertIn("missing/ghost.png", report["manifest_paths_not_in_zip"])
+        self.assertIn(
+            "unsupported file type",
+            " ".join(s["reason"] for s in report["skipped"]),
+        )
+
+    def test_dry_run_and_real_import_agree(self) -> None:
+        from illustration import vault
+
+        archive = self._pack()
+        planned = {p["path"] for p in vault.inspect_zip(archive)["planned"]}
+        result = vault.import_zip(archive)
+        imported = {a.original_filename for a in result["imported"]}
+        self.assertEqual({Path(p).name for p in planned}, imported)
+
+    def test_template_manifest_is_valid_and_uses_known_vocabulary(self) -> None:
+        from src.common import BRANDS_DIR
+        from illustration.models import (
+            REFERENCE_ROLES, VAULT_CATEGORIES, VERIFICATION_STATES,
+        )
+
+        path = (
+            BRANDS_DIR / "oh_betty_jaletti" / "starter_pack_manifest.template.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertTrue(payload["assets"])
+        for entry in payload["assets"]:
+            self.assertIn(entry["category"], VAULT_CATEGORIES)
+            self.assertIn(entry["state"], VERIFICATION_STATES)
+            for role in entry.get("roles", []):
+                self.assertIn(role, REFERENCE_ROLES)

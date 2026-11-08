@@ -134,7 +134,44 @@ recorded in the per-version layer manifest:
 
 ---
 
-## 7. Status ladder
+## 7. Importing the starter pack
+
+Library → **Open Illustration Studio** → **Brand Asset Vault** → *Bootstrap
+from a starter-pack ZIP*.
+
+Put a `manifest.json` at the archive root to assign category, verification
+state, roles and tags per file. A worked template with the real Oh Betty
+Jaletti asset types lives at
+`brands/oh_betty_jaletti/starter_pack_manifest.template.json`.
+
+**Preview (no changes)** runs a dry run first: it lists exactly what would
+import and where, which files the manifest does not describe, which manifest
+paths are missing from the archive, and what would be skipped and why. Nothing
+is written until you press Import.
+
+The manifest is what marks the official flower, signature and seal as
+`locked`, which is what lets the compositor use them as exact source artwork.
+Without it everything lands as `draft` and no label is composited.
+
+## 8. Review and Approvals
+
+Illustrations go through the same machinery as renders, not a parallel one.
+
+**Send to Review** copies the version's exported files into the active
+campaign's `outputs/<campaign>/illustrations/` folder — a copy, so the private
+original never moves — and registers the version in that campaign's approvals
+store as `awaiting_review`. It refuses outright if the version has no real
+exported file yet, rather than queueing something that cannot be looked at.
+
+**Record decision** writes `approved` / `needs_revision` / `rejected` to the
+campaign approvals store and emits a standard `ApprovalEvent`, so Insights and
+the learning engine treat illustration feedback like any other.
+
+`Product-accurate` is only honoured when the product profile is itself
+verified. Tick it against an unverified product and the UI tells you it was
+refused.
+
+## 9. Status ladder
 
 ```
 Draft → Needs Accuracy Review → Approved for Editorial Use → Exported
@@ -146,7 +183,7 @@ stay reachable but never anchor future work.
 
 ---
 
-## 8. Honest limitations
+## 10. Honest limitations
 
 - **No verified product mockup is attached yet.** `A Woman Remembered 10 mL`
   ships with `spec_verified: false`; exact dimensions, production components,
